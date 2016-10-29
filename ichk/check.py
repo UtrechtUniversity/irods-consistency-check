@@ -12,6 +12,8 @@ from irods.models import Resource, Collection, DataObject
 import irods.exception as iexc
 
 
+CHUNK_SIZE = 8192
+
 class Status(Enum):
     OK = 0
     NOT_EXISTING = 1        # File registered in iRODS but not found in vault
