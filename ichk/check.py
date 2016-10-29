@@ -1,7 +1,6 @@
 """Scan and check resource or vault"""
 
 from __future__ import print_function
-from __future__ import unicode_literals
 import sys
 import os
 from enum import Enum
@@ -125,8 +124,8 @@ class ResourceCheck(Check):
 class VaultCheck(Check):
     """Starting from a physical vault path check for consistency"""
 
-    def __init__(self, fqdn, vault_path):
-        super(VaultCheck, self).__init__(fqdn)
+    def __init__(self, session, fqdn, vault_path):
+        super(VaultCheck, self).__init__(session, fqdn)
         self.vault_path = vault_path
 
     def run(self, session):
