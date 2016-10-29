@@ -5,6 +5,8 @@ import sys
 import os
 import errno
 from enum import Enum
+import hashlib
+import base64
 from ichk.formatters import HumanFormatter, CSVFormatter
 from irods.models import Resource, Collection, DataObject
 import irods.exception as iexc
@@ -17,7 +19,7 @@ class Status(Enum):
     FILE_SIZE_MISMATCH = 3  # File sizes do not match between database and vault
     CHECKSUM_MISMATCH = 4   # Checksums do not match between database and vault
     ACCESS_DENIED = 5       # This script was denied access to the file
-
+    NO_CHECKSUM = 6         # iRODS has no checksum registered
 
 class Check(object):
 
@@ -129,6 +131,31 @@ class ResourceCheck(Check):
         data_object_size = data_object[DataObject.size]
         if data_object_size != statinfo.st_size:
             return phy_path, Status.FILE_SIZE_MISMATCH
+
+        irods_checksum = data_object[DataObject.checksum]
+        if not irods_checksum:
+            return phy_path, Status.NO_CHECKSUM
+        else:
+            try:
+                f = open(phy_path, 'rb')
+            except OSError as e:
+                if e.errno == errno.EACCES:
+                    return phy_path, Status.ACCESS_DENIED
+                else:
+                    raise
+            else:
+                hsh  = hashlib.sha256()
+                while True:
+                    chunk = f.read(CHUNK_SIZE)
+                    if chunk:
+                        hsh.update(chunk)
+                    else:
+                        break
+                phy_checksum = b.b64encode(hsh.digest())
+            finally:
+                f.close()
+            if phy_checksum != irods_checksum:
+                return phy_path, Status.CHECKSUM_MISMATCH
 
         return phy_path, Status.OK
 

@@ -12,12 +12,14 @@ vice versa"""
 
 def entry():
     """Use as entry_point in setup.py"""
-    with open(os.path.expanduser("~/.irods/irods_environment.json"), 'r') as f:
-        irods_env = json.load(f)
-
+    env_json = os.path.expanduser("~/.irods/irods_environment.json")
+    try:
+        with open(env_json, 'r') as f:
+            irods_env = json.load(f)
+    except OSError:
+        sys.exit("Can not find or access {}. Please use iinit".format(env_json))
 
     parser = argparse.ArgumentParser(description=__doc__)
-
 
     parser.add_argument("-f", "--fqdn", default=irods_env["irods_host"],
                         help="FQDN of resource")
@@ -36,14 +38,14 @@ def entry():
     password = getpass(prompt="Please provide your irods password:")
 
     print("Connecting to irods at {irods_host}:{irods_port} as {irods_user_name}".format(**irods_env), file=sys.stderr)
+
     session = iRODSSession(
         host=irods_env["irods_host"],
         port=irods_env["irods_port"],
         user=irods_env["irods_user_name"],
-        password = password,
-        zone = irods_env["irods_zone_name"],
+        password=password,
+        zone=irods_env["irods_zone_name"],
     )
-
 
     if args.resource:
         executor = check.ResourceCheck(session, args.fqdn, args.resource)
