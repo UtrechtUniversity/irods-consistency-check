@@ -17,10 +17,10 @@ class HumanFormatter(Formatter):
         self.output = output
 
     def head(self):
-        print("Resource Path\t\t\t|Vault Path\t\t\t|Status", self.output)
+        print("Resource Path =>  Vault Path  [Status]", file=self.output)
 
     def fmt(self, resource_path, vault_path, status):
-        print("{resource_path}\t\t\t|{vault_path}\t\t\t|{status.name}\n".format(**locals()), self.output)
+        print("{resource_path} =>  {vault_path}   [{status.name}]".format(**locals()), file=self.output)
 
 
 class CSVFormatter(Formatter):

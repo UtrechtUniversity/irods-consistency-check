@@ -3,6 +3,7 @@
 from __future__ import print_function
 import sys
 import os
+import errno
 from enum import Enum
 from ichk.formatters import HumanFormatter, CSVFormatter
 from irods.models import Resource, Collection, DataObject
@@ -15,6 +16,7 @@ class Status(Enum):
     NOT_REGISTERED = 2      # File found in vault but is not registered in iRODS
     FILE_SIZE_MISMATCH = 3  # File sizes do not match between database and vault
     CHECKSUM_MISMATCH = 4   # Checksums do not match between database and vault
+    ACCESS_DENIED = 5       # This script was denied access to the file
 
 
 class Check(object):
@@ -66,6 +68,7 @@ class Check(object):
         """Must be implemented by subclass"""
         raise NotImplementedError
 
+
 class ResourceCheck(Check):
     """Starting from a Resource path. Check consistency of database"""
 
@@ -94,31 +97,40 @@ class ResourceCheck(Check):
         results = query.all()
         collections = results.rows
         for collection in collections:
-            for result in self.check_data_objects(collection):
-                self.formatter.fmt(*result)
+            self.check_collection(collection)
 
-
-    def check_data_objects(self, collection):
+    def check_collection(self, collection):
         coll_id = collection[Collection.id]
         coll_name = collection[Collection.name]
+
+        #todo build path in vault from collection name and check if it exists
+
         data_objects = self.session.query(DataObject).filter(Collection.id==coll_id).all().rows
         for data_object in data_objects:
-            phy_path = data_object[DataObject.path]
             obj_name = data_object[DataObject.name]
             obj_path = coll_name + '/' + obj_name
-            if not os.path.exists(phy_path):
-                yield  obj_path, phy_path, Status.NOT_EXISTING
-                continue
+            phy_path, status = self.check_data_object(data_object, obj_path)
+            self.formatter.fmt(obj_path, phy_path, status)
 
-            data_object_size = data_object[DataObject.size]
-            stat = os.stat(phy_path)
-            if data_object_size != stat.st_size:
-                yield obj_path, phy_path, Status.FILE_SIZE_MISMATCH
-                continue
+    def check_data_object(self, data_object, obj_path):
+        phy_path = data_object[DataObject.path]
 
-            yield obj_path, phy_path, Status.OK
+        try:
+            statinfo = os.stat(phy_path)
+        except OSError as e:
+            if e.errno == errno.ENOENT:
+                return  obj_path, phy_path, Status.NOT_EXISTING
+            elif e.errno == errno.EACCES:
+                return phy_path, Status.ACCESS_DENIED
+            else:
+                raise
 
+        # TODO: what about sparse files?
+        data_object_size = data_object[DataObject.size]
+        if data_object_size != statinfo.st_size:
+            return phy_path, Status.FILE_SIZE_MISMATCH
 
+        return phy_path, Status.OK
 
 
 class VaultCheck(Check):
