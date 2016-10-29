@@ -108,6 +108,20 @@ class ResourceCheck(Check):
         coll_name = collection[Collection.name]
 
         #todo build path in vault from collection name and check if it exists
+        zone_name = self.resource[Resource.zone_name]
+        prefix = "/" + zone_name
+        coll_path = coll_name.replace(prefix, self.vault)
+
+        try:
+            os.stat(coll_path)
+        except OSError as e:
+            if e.errno == errno.ENOENT:
+                self.formatter.fmt(coll_name, coll_path, Status.NOT_EXISTING)
+            elif e.errno == errno.EACCES:
+                self.formatter.fmt(coll_name, coll_path, Status.ACCESS_DENIED)
+            else:
+                raise
+
 
         data_objects = self.session.query(DataObject).filter(Collection.id==coll_id).all().rows
         for data_object in data_objects:
