@@ -153,7 +153,7 @@ class ResourceCheck(Check):
                         hsh.update(chunk)
                     else:
                         break
-                phy_checksum = base64.b64encode(hsh.digest())
+                phy_checksum = "sha2:" + base64.b64encode(hsh.digest())
             finally:
                 f.close()
             if phy_checksum != irods_checksum:
