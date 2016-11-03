@@ -1,3 +1,5 @@
+"""Check recursively if an iRods resource is consistent with its vault or
+vice versa"""
 from __future__ import print_function
 import sys
 import os
@@ -6,8 +8,6 @@ import json
 from getpass import getpass
 from ichk import check
 from irods.session import iRODSSession
-"""Check recursively if an iRods resource is consistent with its vault or
-vice versa"""
 
 
 def entry():
@@ -32,12 +32,17 @@ def entry():
                         help="Write output to file")
     parser.add_argument("-m", "--format", dest="fmt", default='human',
                         help="Output format", choices=['human', 'csv'])
+    parser.add_argument("-t", "--truncate", default=False,
+                        help="Truncate the output to the width of the console")
 
     args = parser.parse_args()
 
     password = getpass(prompt="Please provide your irods password:")
 
-    print("Connecting to irods at {irods_host}:{irods_port} as {irods_user_name}".format(**irods_env), file=sys.stderr)
+    print(
+        "Connecting to irods at {irods_host}:{irods_port} as {irods_user_name}"
+        .format(**irods_env), file=sys.stderr
+    )
 
     session = iRODSSession(
         host=irods_env["irods_host"],
@@ -52,6 +57,10 @@ def entry():
     else:
         executor = check.VaultCheck(session, args.fqdn, args.vault)
 
-    executor.setformatter(args.output, args.fmt)
+    options = { 'output': args.output or sys.stdout, 'fmt': args.fmt}
+    if args.truncate:
+        options['truncate'] = True
+
+    executor.setformatter(**options)
 
     executor.run()

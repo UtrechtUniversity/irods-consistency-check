@@ -5,7 +5,8 @@ setup(
    author_email="p.frederiks@uu.nl",
    description=('Check consistency of irods database and vault'),
    install_requires=[
-       'python-irodsclient'
+       'python-irodsclient',
+       'enum34',
    ],
    name='ichk',
    packages=['ichk'],

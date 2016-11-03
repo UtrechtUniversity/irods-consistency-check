@@ -7,7 +7,7 @@ import errno
 from enum import Enum
 import hashlib
 import base64
-from ichk.formatters import HumanFormatter, CSVFormatter
+from ichk.formatters import Formatter
 from irods.models import Resource, Collection, DataObject
 import irods.exception as iexc
 
@@ -31,12 +31,17 @@ class Check(object):
         self.fqdn = fqdn
         self.session = session
 
-    def setformatter(self, output, fmt):
+    def setformatter(self, output=None, fmt=None, **options):
         """Use different formatters based on fmt Argument"""
-        if fmt == "human":
-            self.formatter = HumanFormatter(output)
-        elif fmt == "csv":
-            self.formatter = CSVFormatter(output)
+        if (output is None) or (fmt is None):
+            raise ValueError(
+                "Check.setformatter needs an output and fmt argument")
+
+        formatters = Formatter.__subclasses__()
+        for formatter in formatters:
+            if formatter.name == fmt:
+                self.formatter = formatter(output, **options)
+                break
         else:
             raise ValueError("Unknown formatter: {}".format(fmt))
 
@@ -171,7 +176,7 @@ class ResourceCheck(Check):
                 else:
                     raise
             else:
-                hsh  = hashlib.sha256()
+                hsh = hashlib.sha256()
                 while True:
                     chunk = f.read(CHUNK_SIZE)
                     if chunk:
