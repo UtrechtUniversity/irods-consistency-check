@@ -24,6 +24,8 @@ class HumanFormatter(Formatter):
         if truncate:
             # TODO: write routine to check column width of active terminal
             self.truncate = 179
+        else:
+            self.truncate = None
         super(HumanFormatter, self).__init__(output=output)
 
     def head(self):
@@ -51,5 +53,5 @@ class CSVFormatter(Formatter):
         self.writer.writerow(['Status', 'Resource Path', 'Vault Path'])
 
     def fmt(self, resource_path, vault_path, status):
-        self.writer.writerow([status, resource_path, vault_path])
+        self.writer.writerow([status.name, resource_path, vault_path])
 

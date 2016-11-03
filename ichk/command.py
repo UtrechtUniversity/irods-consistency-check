@@ -8,7 +8,7 @@ import json
 from getpass import getpass
 from ichk import check
 from irods.session import iRODSSession
-
+from irodsutils import password_obfuscation
 
 def entry():
     """Use as entry_point in setup.py"""
@@ -37,7 +37,14 @@ def entry():
 
     args = parser.parse_args()
 
-    password = getpass(prompt="Please provide your irods password:")
+
+    irodsA =  os.path.expanduser("~/.irods/.irodsA")
+    try:
+        with open(irodsA, "r") as r:
+            scrambled_password = r.read()
+            password = password_obfuscation.decode(scrambled_password)
+    except OSError:
+        password = getpass(prompt="Please provide your irods password:")
 
     print(
         "Connecting to irods at {irods_host}:{irods_port} as {irods_user_name}"

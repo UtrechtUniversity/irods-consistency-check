@@ -7,13 +7,14 @@ setup(
    install_requires=[
        'python-irodsclient',
        'enum34',
+       'six'
    ],
    name='ichk',
-   packages=['ichk'],
+   packages=['ichk', 'irodsutils'],
    entry_points={
        'console_scripts': [
            'ichk = ichk.command:entry'
        ]
    },
-   version='0.0.6'
+   version='0.0.7'
 )
