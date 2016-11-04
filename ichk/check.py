@@ -7,7 +7,6 @@ import errno
 from enum import Enum
 import hashlib
 import base64
-import copy
 from ichk.formatters import Formatter
 from irods.models import Resource, Collection, DataObject
 import irods.exception as iexc
@@ -53,7 +52,7 @@ class Check(object):
         except iexc.NoResultFound:
             sys.exit("No result found for a resource named: {resource_path}"
                      .format(**locals()))
-        self.resource = resource
+        return resource
 
     def get_resource_from_vault_path(self, vault_path):
         try:
@@ -62,8 +61,7 @@ class Check(object):
         except iexc.NoResultFound:
             sys.exit("No found found for vault path: {vault_path}"
                      .format(**locals()))
-        self.resource = resource
-        vault = os.path(vault_path)
+        return resource
 
     @property
     def vault(self):
@@ -99,40 +97,43 @@ class ResourceCheck(Check):
 
         # Step 1:
         # Check if Resource is accessible for current user and get details
-        self.get_resource(self.resource_name)
-        self.storage_resource()
+        resource = self.get_resource(self.resource_name)
+        root = [self.resource_name]
+        for storage, vault, hiera in self.storage_resources(resource, root):
+            self.vault = vault
+            self.hiera = hiera
+            self.storage_resource = storage
+            self.check_collections(resource)
 
-    def storage_resource(self):
+    def storage_resources(self, resource, hiera):
         # Step 2:
         # Check if associated physical path to the vault is accessible
         # or if it is a composable resource. Check collections if storage
         # resource is encountered. Recurse on the children if not.
-        vault = self.resource[Resource.vault_path]
+        vault = resource[Resource.vault_path]
         if vault == "EMPTY_RESC_PATH":
             print("{} is not a storage resource.".format(self.resource_name),
                   file=sys.stderr)
-            children = self.resource[Resource.children]
+            children = resource[Resource.children]
             # children is returned as a string like: "childA{};childB{}"
             for child in (c.rstrip("{}") for c in children.split(";")):
-                print("Checking if child {} is storage resource".format(child),
+                print("{} has child {}".format(resource[Resource.name], child),
                       file=sys.stderr)
-                r = copy.copy(self)
-                r.resource_name = child
-                r.get_resource(child)
-                r.run()
-        elif self.resource[Resource.location] == self.fqdn:
+                child_resource = self.get_resource(child)
+                hiera.append(child)
+                self.storage_resource(child_resource, hiera)
+        elif resource[Resource.location] == self.fqdn:
             print("{} is a storage resource with vault path {}"
-                  .format(self.resource_name, vault),
+                  .format(resource[Resource.name], vault),
                   file=sys.stderr)
-            self.vault = vault
-            self.check_collections()
+            yield resource, vault, ";".join(hiera)
         else:
             print("Storage resource {} not on fqdn {}, but {}"
                   .format(self.resource_name, self.fqdn,
                           self.resource[Resource.location]),
                   file=sys.stderr)
 
-    def check_collections(self):
+    def check_collections(self, resource):
         # Step 3:
         # Recursively go over every collection, subcollection and data object
         # in the resource and do the following checks:
@@ -140,19 +141,36 @@ class ResourceCheck(Check):
         # b) If it is a file do the file sizes match with iRODS?
         # c) If it is a file with a checksum, do the checksums match?
         # Call the dataformatter for every result.
-        query = (self.session.query(Collection.id, Collection.name)
-                 .filter(Resource.id == self.resource[Resource.id]))
+        collections = (
+            (coll[Collection.id], coll[Collection.name])
+            for coll
+            in (self.session.query(Collection.id, Collection.name)
+                .filter(Resource.id == resource[Resource.id])
+                .all()
+                .rows)
+        )
 
-        results = query.all()
-        collections = results.rows
-        for collection in collections:
-            self.check_collection(collection)
+        for coll_id, coll_name in collections:
+            found_on_disk = self.check_collection(coll_id, coll_name)
+            if not found_on_disk:
+                continue
 
-    def check_collection(self, collection):
-        coll_id = collection[Collection.id]
-        coll_name = collection[Collection.name]
+            data_objects = (
+                self.session.query(DataObject)
+                .filter(Collection.id == coll_id)
+                .filter(DataObject.resc_hier == self.hiera)
+                .all()
+                .rows
+            )
 
-        zone_name = self.resource[Resource.zone_name]
+            for data_object in data_objects:
+                obj_name = data_object[DataObject.name]
+                obj_path = coll_name + '/' + obj_name
+                phy_path, status = self.check_data_object(data_object, obj_path)
+                self.formatter.fmt(obj_path, phy_path, status)
+
+    def check_collection(self, coll_id, coll_name):
+        zone_name = self.storage_resource[Resource.zone_name]
         prefix = "/" + zone_name
         coll_path = coll_name.replace(prefix, self.vault)
 
@@ -160,20 +178,15 @@ class ResourceCheck(Check):
             os.stat(coll_path)
         except OSError as e:
             if e.errno == errno.ENOENT:
-                self.formatter.fmt(coll_name, coll_path, Status.NOT_EXISTING)
+                return False
             elif e.errno == errno.EACCES:
                 self.formatter.fmt(coll_name, coll_path, Status.ACCESS_DENIED)
+                return False
             else:
                 raise
 
-        data_objects = (self.session.query(DataObject)
-                        .filter(Collection.id == coll_id)
-                        .all().rows)
-        for data_object in data_objects:
-            obj_name = data_object[DataObject.name]
-            obj_path = coll_name + '/' + obj_name
-            phy_path, status = self.check_data_object(data_object, obj_path)
-            self.formatter.fmt(obj_path, phy_path, status)
+        self.formatter.fmt(coll_name, coll_path, Status.OK)
+        return True
 
     def check_data_object(self, data_object, obj_path):
         phy_path = data_object[DataObject.path]
