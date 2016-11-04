@@ -98,14 +98,28 @@ class ResourceCheck(Check):
         # Step 1:
         # Check if Resource is accessible for current user and get details
         resource = self.get_resource(self.resource_name)
-        root = [self.resource_name]
-        for storage, vault, hiera in self.storage_resources(resource, root):
+        root, hiera = self.find_root(resource)
+        for storage, vault, hiera in self.find_storage(resource, hiera):
             self.vault = vault
             self.hiera = hiera
-            self.resource = resource
-            self.check_collections(resource)
+            self.storage = storage
+            self.check_collections(root)
 
-    def storage_resources(self, resource, hiera):
+    def find_root(self, resource):
+        hiera = list()
+        def climb(resource):
+            parent = resource[Resource.parent]
+            if resource[Resource.parent] is None:
+                print("Root resouce is {}".format(resource[Resource.name]),
+                      file=sys.stderr)
+                return resource
+            else:
+                hiera.append(resource[Resource.name])
+                parent = climb(self.get_resource(parent))
+
+        return climb(resource), hiera.reverse()
+
+    def find_storage(self, resource, hiera):
         # Step 2:
         # Check if associated physical path to the vault is accessible
         # or if it is a composable resource. Check collections if storage
@@ -121,7 +135,7 @@ class ResourceCheck(Check):
                       file=sys.stderr)
                 child_resource = self.get_resource(child)
                 hiera.append(child)
-                yield next(self.storage_resources(child_resource, hiera))
+                yield next(self.find_storage(child_resource, hiera))
         elif resource[Resource.location] == self.fqdn:
             print("{} is a storage resource with vault path {}"
                   .format(resource[Resource.name], vault),
