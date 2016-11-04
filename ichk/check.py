@@ -7,6 +7,7 @@ import errno
 from enum import Enum
 import hashlib
 import base64
+import copy
 from ichk.formatters import Formatter
 from irods.models import Resource, Collection, DataObject
 import irods.exception as iexc
@@ -99,11 +100,39 @@ class ResourceCheck(Check):
         # Step 1:
         # Check if Resource is accessible for current user and get details
         self.get_resource(self.resource_name)
+        self.storage_resource()
 
+    def storage_resource(self):
         # Step 2:
         # Check if associated physical path to the vault is accessible
-        self.vault = self.resource[Resource.vault_path]
+        # or if it is a composable resource. Check collections if storage
+        # resource is encountered. Recurse on the children if not.
+        vault = self.resource[Resource.vault_path]
+        if vault == "EMPTY_RESC_PATH":
+            print("{} is not a storage resource.".format(self.resource_name),
+                  file=sys.stderr)
+            children = self.resource[Resource.children]
+            # children is returned as a string like: "childA{};childB{}"
+            for child in (c.rstrip("{}") for c in children.split(";")):
+                print("Checking if child {} is storage resource".format(child),
+                      file=sys.stderr)
+                r = copy.copy(self)
+                r.resource_name = child
+                r.get_resource(child)
+                r.run()
+        elif self.resource[Resource.location] == self.fqdn:
+            print("{} is a storage resource with vault path {}"
+                  .format(self.resource_name, vault),
+                  file=sys.stderr)
+            self.vault = vault
+            self.check_collections()
+        else:
+            print("Storage resource {} not on fqdn {}, but {}"
+                  .format(self.resource_name, self.fqdn,
+                          self.resource[Resource.location]),
+                  file=sys.stderr)
 
+    def check_collections(self):
         # Step 3:
         # Recursively go over every collection, subcollection and data object
         # in the resource and do the following checks:
