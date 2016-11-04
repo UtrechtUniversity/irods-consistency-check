@@ -102,7 +102,7 @@ class ResourceCheck(Check):
         for storage, vault, hiera in self.storage_resources(resource, root):
             self.vault = vault
             self.hiera = hiera
-            self.storage_resource = storage
+            self.resource = resource
             self.check_collections(resource)
 
     def storage_resources(self, resource, hiera):
@@ -121,7 +121,7 @@ class ResourceCheck(Check):
                       file=sys.stderr)
                 child_resource = self.get_resource(child)
                 hiera.append(child)
-                self.storage_resource(child_resource, hiera)
+                self.storage_resources(child_resource, hiera)
         elif resource[Resource.location] == self.fqdn:
             print("{} is a storage resource with vault path {}"
                   .format(resource[Resource.name], vault),
@@ -170,7 +170,7 @@ class ResourceCheck(Check):
                 self.formatter.fmt(obj_path, phy_path, status)
 
     def check_collection(self, coll_id, coll_name):
-        zone_name = self.storage_resource[Resource.zone_name]
+        zone_name = self.resource[Resource.zone_name]
         prefix = "/" + zone_name
         coll_path = coll_name.replace(prefix, self.vault)
 
