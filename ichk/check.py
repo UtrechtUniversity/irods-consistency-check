@@ -120,7 +120,6 @@ class ResourceCheck(Check):
                 print("{} has child {}".format(resource[Resource.name], child),
                       file=sys.stderr)
                 child_resource = self.get_resource(child)
-                import pdb; pdb.set_trace()
                 hiera.append(child)
                 yield next(self.storage_resources(child_resource, hiera))
         elif resource[Resource.location] == self.fqdn:
