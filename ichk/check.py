@@ -120,8 +120,9 @@ class ResourceCheck(Check):
                 print("{} has child {}".format(resource[Resource.name], child),
                       file=sys.stderr)
                 child_resource = self.get_resource(child)
+                import pdb; pdb.set_trace()
                 hiera.append(child)
-                self.storage_resources(child_resource, hiera)
+                yield next(self.storage_resources(child_resource, hiera))
         elif resource[Resource.location] == self.fqdn:
             print("{} is a storage resource with vault path {}"
                   .format(resource[Resource.name], vault),
@@ -132,6 +133,7 @@ class ResourceCheck(Check):
                   .format(self.resource_name, self.fqdn,
                           self.resource[Resource.location]),
                   file=sys.stderr)
+            yield resource, vault, ";".join(hiera)
 
     def check_collections(self, resource):
         # Step 3:
