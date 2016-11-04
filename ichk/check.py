@@ -78,6 +78,49 @@ class Check(object):
             sys.exit("Vault path {vault_path} does not exist"
                      .format(**locals()))
 
+    def find_root(self, resource):
+        hiera = [resource[Resource.name]]
+
+        def climb(resource):
+            parent = resource[Resource.parent]
+            if parent is None:
+                print("Root resource is {}".format(resource[Resource.name]),
+                      file=sys.stderr)
+                return resource
+            else:
+                hiera.append(parent)
+                return climb(self.get_resource(parent))
+
+        root = climb(resource)
+        hiera.reverse()
+        return root, hiera
+
+    def find_storage(self, resource, hiera):
+
+        vault = resource[Resource.vault_path]
+        if vault == "EMPTY_RESC_PATH":
+            print("{} is not a storage resource.".format(resource[Resource.name]),
+                  file=sys.stderr)
+            children = resource[Resource.children]
+            # children is returned as a string like: "childA{};childB{}"
+            for child in (c.rstrip("{}") for c in children.split(";")):
+                print("{} has child {}".format(resource[Resource.name], child),
+                      file=sys.stderr)
+                child_resource = self.get_resource(child)
+                hiera = hiera + [child]
+                yield next(self.find_storage(child_resource, hiera))
+        elif resource[Resource.location] == self.fqdn:
+            print("{} is a storage resource with vault path {}"
+                  .format(resource[Resource.name], vault),
+                  file=sys.stderr)
+            yield resource, vault, ";".join(hiera)
+        else:
+            print("Storage resource {} not on fqdn {}, but {}"
+                  .format(resource[Resource.name], self.fqdn,
+                          resource[Resource.location]),
+                  file=sys.stderr)
+            yield resource, vault, ";".join(hiera)
+
     def run(self):
         """Must be implemented by subclass"""
         raise NotImplementedError
@@ -99,60 +142,18 @@ class ResourceCheck(Check):
         # Check if Resource is accessible for current user and get details
         resource = self.get_resource(self.resource_name)
         root, hiera = self.find_root(resource)
-        for storage, vault, hiera in self.find_storage(resource, hiera):
+        self.root = root
+        for storage, vault, hiera_str in self.find_storage(resource, hiera):
             self.vault = vault
-            self.hiera = hiera
+            self.hiera = hiera_str
             self.storage = storage
-            self.check_collections(root)
+            self.check_collections()
 
-    def find_root(self, resource):
-        hiera = list()
-        def climb(resource):
-            parent = resource[Resource.parent]
-            if resource[Resource.parent] is None:
-                print("Root resouce is {}".format(resource[Resource.name]),
-                      file=sys.stderr)
-                return resource
-            else:
-                hiera.append(resource[Resource.name])
-                parent = climb(self.get_resource(parent))
-
-        return climb(resource), hiera.reverse()
-
-    def find_storage(self, resource, hiera):
-        # Step 2:
-        # Check if associated physical path to the vault is accessible
-        # or if it is a composable resource. Check collections if storage
-        # resource is encountered. Recurse on the children if not.
-        vault = resource[Resource.vault_path]
-        if vault == "EMPTY_RESC_PATH":
-            print("{} is not a storage resource.".format(self.resource_name),
-                  file=sys.stderr)
-            children = resource[Resource.children]
-            # children is returned as a string like: "childA{};childB{}"
-            for child in (c.rstrip("{}") for c in children.split(";")):
-                print("{} has child {}".format(resource[Resource.name], child),
-                      file=sys.stderr)
-                child_resource = self.get_resource(child)
-                hiera.append(child)
-                yield next(self.find_storage(child_resource, hiera))
-        elif resource[Resource.location] == self.fqdn:
-            print("{} is a storage resource with vault path {}"
-                  .format(resource[Resource.name], vault),
-                  file=sys.stderr)
-            yield resource, vault, ";".join(hiera)
-        else:
-            print("Storage resource {} not on fqdn {}, but {}"
-                  .format(self.resource_name, self.fqdn,
-                          self.resource[Resource.location]),
-                  file=sys.stderr)
-            yield resource, vault, ";".join(hiera)
-
-    def check_collections(self, resource):
+    def check_collections(self):
         # Step 3:
-        # Recursively go over every collection, subcollection and data object
-        # in the resource and do the following checks:
-        # a) Does file or directory exist in vault?
+        # Recursively go over every collection
+        # in the root resource and do the following checks:
+        # a) Does the directory exist in the vault?
         # b) If it is a file do the file sizes match with iRODS?
         # c) If it is a file with a checksum, do the checksums match?
         # Call the dataformatter for every result.
@@ -160,7 +161,7 @@ class ResourceCheck(Check):
             (coll[Collection.id], coll[Collection.name])
             for coll
             in (self.session.query(Collection.id, Collection.name)
-                .filter(Resource.id == resource[Resource.id])
+                .filter(Resource.id == self.root[Resource.id])
                 .all()
                 .rows)
         )
@@ -169,6 +170,11 @@ class ResourceCheck(Check):
             found_on_disk = self.check_collection(coll_id, coll_name)
             if not found_on_disk:
                 continue
+
+            print("Checking data objects of collection {} in hierarchy: {}"
+                   .format(coll_name, self.hiera),
+                   file=sys.stderr)
+
 
             data_objects = (
                 self.session.query(DataObject)
@@ -185,7 +191,7 @@ class ResourceCheck(Check):
                 self.formatter.fmt(obj_path, phy_path, status)
 
     def check_collection(self, coll_id, coll_name):
-        zone_name = self.resource[Resource.zone_name]
+        zone_name = self.root[Resource.zone_name]
         prefix = "/" + zone_name
         coll_path = coll_name.replace(prefix, self.vault)
 
@@ -274,5 +280,3 @@ class VaultCheck(Check):
         # b) If it is a file do the file sizes match with iRODS?
         # c) If it is a file with a checksum, do the checksums match?
         # Call the dataformatter for every result.
-
-
