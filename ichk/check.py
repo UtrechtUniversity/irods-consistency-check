@@ -25,6 +25,79 @@ class Status(Enum):
     NO_CHECKSUM = 6         # iRODS has no checksum registered
 
 
+class ObjectChecker(object):
+
+    def __init__(self, data_object, phy_path):
+        self.data_object = data_object
+        self.obj_path = data_object[DataObject.path]
+        self.phy_path = phy_path
+        self._statinfo = None
+
+    @property
+    def statinfo(self):
+        if self._statinfo:
+            return self._statinfo
+
+        try:
+            statinfo = os.stat(self.phy_path)
+        except OSError as e:
+            if e.errno == errno.ENOENT:
+                statinfo = Status.NOT_EXISTING
+            elif e.errno == errno.EACCES:
+                statinfo = Status.ACCESS_DENIED
+            else:
+                raise
+
+        self._statinfo = statinfo
+        return statinfo
+
+    def exists_on_disk(self):
+        if isinstance(self.statinfo, Status):
+            return self.statinfo
+        return Status.OK
+
+    def compare_filesize(self):
+        # TODO: what about sparse files?
+        data_object_size = self.data_object[DataObject.size]
+        if isinstance(self.statinfo, Status):
+            return self.statinfo
+
+        if data_object_size != self.statinfo.st_size:
+            return Status.FILE_SIZE_MISMATCH
+
+        return Status.OK
+
+    def compare_checksums(self):
+        irods_checksum = self.data_object[DataObject.checksum]
+        if not irods_checksum:
+            return Status.NO_CHECKSUM
+
+        try:
+            f = open(self.phy_path, 'rb')
+        except OSError as e:
+            if e.errno == errno.EACCES:
+                return Status.ACCESS_DENIED
+            else:
+                raise
+        else:
+
+            hsh = hashlib.sha256()
+            while True:
+                chunk = f.read(CHUNK_SIZE)
+                if chunk:
+                    hsh.update(chunk)
+                else:
+                    break
+            phy_checksum = base64.b64encode(hsh.digest())
+        finally:
+            f.close()
+        if phy_checksum != irods_checksum:
+            return Status.CHECKSUM_MISMATCH
+
+        return Status.OK
+
+
+
 class Check(object):
 
     def __init__(self, session, fqdn):
@@ -172,9 +245,8 @@ class ResourceCheck(Check):
                 continue
 
             print("Checking data objects of collection {} in hierarchy: {}"
-                   .format(coll_name, self.hiera),
-                   file=sys.stderr)
-
+                  .format(coll_name, self.hiera),
+                  file=sys.stderr)
 
             data_objects = (
                 self.session.query(DataObject)
@@ -187,7 +259,16 @@ class ResourceCheck(Check):
             for data_object in data_objects:
                 obj_name = data_object[DataObject.name]
                 obj_path = coll_name + '/' + obj_name
-                phy_path, status = self.check_data_object(data_object, obj_path)
+                phy_path = data_object[DataObject.path]
+
+                object_checker = ObjectChecker(data_object, phy_path)
+
+                status = object_checker.exists_on_disk()
+                if status == Status.OK:
+                    status = object_checker.compare_filesize()
+                    if status == Status.OK:
+                        status = object_checker.compare_checksums()
+
                 self.formatter.fmt(obj_path, phy_path, status)
 
     def check_collection(self, coll_id, coll_name):

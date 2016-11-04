@@ -19,6 +19,11 @@ class HumanFormatter(Formatter):
 
     name = 'human'
     options = ['truncate']
+    template = """----
+Status: {status.name}
+Resource path: {resource_path}
+Vault path:  {vault_path}
+"""
 
     def __init__(self, output=None, truncate=None):
         if truncate:
@@ -29,14 +34,11 @@ class HumanFormatter(Formatter):
         super(HumanFormatter, self).__init__(output=output)
 
     def head(self):
-        print("[Status] Resource Path => Vault Path", file=self.output)
+        print("Results of consistency check\n\n", file=self.output)
 
     def fmt(self, resource_path, vault_path, status):
-        print(
-            "[{status.name}] {resource_path} => {vault_path}"
-            .format(**locals())[:self.truncate],
-            file=self.output
-        )
+        print(self.template.format(**locals()),
+              file=self.output)
 
 
 class CSVFormatter(Formatter):
