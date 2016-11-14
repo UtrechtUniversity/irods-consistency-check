@@ -11,7 +11,7 @@ class Formatter(object):
     def head(self):
         raise NotImplementedError
 
-    def fmt(self):
+    def __call__(self):
         raise NotImplementedError
 
 
@@ -20,9 +20,9 @@ class HumanFormatter(Formatter):
     name = 'human'
     options = ['truncate']
     template = """----
-Status: {status.name}
-Resource path: {resource_path}
-Vault path:  {vault_path}
+iRODS path: {0.obj_path}
+Physical path:  {0.phy_path}
+Status: {0.status.name}
 """
 
     def __init__(self, output=None, truncate=None):
@@ -36,8 +36,8 @@ Vault path:  {vault_path}
     def head(self):
         print("Results of consistency check\n\n", file=self.output)
 
-    def fmt(self, resource_path, vault_path, status):
-        print(self.template.format(**locals()),
+    def __call__(self, result):
+        print(self.template.format(result),
               file=self.output)
 
 
@@ -49,11 +49,11 @@ class CSVFormatter(Formatter):
         super(CSVFormatter, self).__init__(output=output)
 
         import csv
-        self.writer = csv.writer(self.output, dialect=csv.excel)
+        self.writer = csv.writer(
+            self.output, dialect=csv.excel)
 
     def head(self):
-        self.writer.writerow(['Status', 'Resource Path', 'Vault Path'])
+        self.writer.writerow(('Status', 'Resource Path', 'Vault Path'))
 
-    def fmt(self, resource_path, vault_path, status):
-        self.writer.writerow([status.name, resource_path, vault_path])
-
+    def __call__(self, result):
+        self.writer.writerow(result)

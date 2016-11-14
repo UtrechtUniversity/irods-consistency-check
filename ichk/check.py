@@ -5,13 +5,14 @@ import sys
 import os
 import errno
 from enum import Enum
+from collections import namedtuple
 import hashlib
 import base64
 from ichk.formatters import Formatter
 from irods.models import Resource, Collection, DataObject
 import irods.exception as iexc
 
-
+ALGORITHMS = {'md5': hashlib.md5, 'sha2': hashlib.sha256}
 CHUNK_SIZE = 8192
 
 
@@ -23,6 +24,24 @@ class Status(Enum):
     CHECKSUM_MISMATCH = 4   # Checksums do not match between database and vault
     ACCESS_DENIED = 5       # This script was denied access to the file
     NO_CHECKSUM = 6         # iRODS has no checksum registered
+
+
+Result = namedtuple('Result', 'obj_path phy_path status')
+
+
+def on_disk(path):
+
+    try:
+        os.stat(path)
+    except OSError as e:
+        if e.errno == errno.ENOENT:
+            return Status.NOT_EXISTING
+        elif e.errno == errno.EACCES:
+            return Status.ACCESS_DENIED
+        else:
+            raise
+
+    return Status.OK
 
 
 class ObjectChecker(object):
@@ -80,8 +99,13 @@ class ObjectChecker(object):
             else:
                 raise
         else:
+            # iRODS returns checksums as base64 encoded string of the hash
+            # prepended with the name of the hash algorithm used, seperated
+            # by a colon, ':'.
+            algo, irods_checksum = irods_checksum.split(":")
 
-            hsh = hashlib.sha256()
+            hsh = ALGORITHMS[algo]()
+
             while True:
                 chunk = f.read(CHUNK_SIZE)
                 if chunk:
@@ -95,7 +119,6 @@ class ObjectChecker(object):
             return Status.CHECKSUM_MISMATCH
 
         return Status.OK
-
 
 
 class Check(object):
@@ -123,17 +146,18 @@ class Check(object):
             resource = self.session.query(Resource).filter(
                 Resource.name == resource_name).one()
         except iexc.NoResultFound:
-            sys.exit("No result found for a resource named: {resource_path}"
-                     .format(**locals()))
+            print("No result found for a resource named: {resource_name}"
+                  .format(**locals()),
+                  file=sys.stderr)
+            resource = None
         return resource
 
-    def get_resource_from_vault_path(self, vault_path):
+    def get_resource_from_phy_path(self, phy_path):
         try:
             resource = self.session.query(Resource).filter(
-                Resource.vault_path == vault_path).one()
+                Resource.vault_path == phy_path).one()
         except iexc.NoResultFound:
-            sys.exit("No found found for vault path: {vault_path}"
-                     .format(**locals()))
+            resource = None
         return resource
 
     @property
@@ -152,7 +176,7 @@ class Check(object):
                      .format(**locals()))
 
     def find_root(self, resource):
-        hiera = [resource[Resource.name]]
+        ancestors = []
 
         def climb(resource):
             parent = resource[Resource.parent]
@@ -161,38 +185,42 @@ class Check(object):
                       file=sys.stderr)
                 return resource
             else:
-                hiera.append(parent)
+                ancestors.append(parent)
                 return climb(self.get_resource(parent))
 
         root = climb(resource)
-        hiera.reverse()
-        return root, hiera
+        ancestors.reverse()
+        return root, ancestors
 
-    def find_storage(self, resource, hiera):
+    def find_leaves(self, resource, ancestors=None):
+        """Find leaf nodes of the resource hierarchy. These are the storage
+        resources containing the actual data."""
 
-        vault = resource[Resource.vault_path]
-        if vault == "EMPTY_RESC_PATH":
-            print("{} is not a storage resource.".format(resource[Resource.name]),
-                  file=sys.stderr)
-            children = resource[Resource.children]
-            # children is returned as a string like: "childA{};childB{}"
-            for child in (c.rstrip("{}") for c in children.split(";")):
-                print("{} has child {}".format(resource[Resource.name], child),
+        if ancestors is None:
+            ancestors = []
+        to_visit = [(resource, ancestors)]
+
+        while len(to_visit) > 0:
+            node, ancestors = to_visit.pop(0)
+            children = node[Resource.children]
+            if children:
+                ancestors_of_children = ancestors + [node[Resource.name]]
+                for child in (c.strip("{}") for c in children.split(";")):
+                    child_resource = self.get_resource(child)
+                    to_visit.append((child_resource, ancestors_of_children))
+
+            elif node[Resource.location] == self.fqdn:
+                print("{} is a storage resource with vault path {}"
+                      .format(node[Resource.name], node[Resource.vault_path]),
                       file=sys.stderr)
-                child_resource = self.get_resource(child)
-                hiera = hiera + [child]
-                yield next(self.find_storage(child_resource, hiera))
-        elif resource[Resource.location] == self.fqdn:
-            print("{} is a storage resource with vault path {}"
-                  .format(resource[Resource.name], vault),
-                  file=sys.stderr)
-            yield resource, vault, ";".join(hiera)
-        else:
-            print("Storage resource {} not on fqdn {}, but {}"
-                  .format(resource[Resource.name], self.fqdn,
-                          resource[Resource.location]),
-                  file=sys.stderr)
-            yield resource, vault, ";".join(hiera)
+                hiera = ancestors + [node[Resource.name]]
+                yield node, hiera
+
+            else:
+                print("Storage resource {} not on fqdn {}, but {}"
+                      .format(resource[Resource.name], self.fqdn,
+                      resource[Resource.location]),
+                      file=sys.stderr)
 
     def run(self):
         """Must be implemented by subclass"""
@@ -209,46 +237,28 @@ class ResourceCheck(Check):
     def run(self):
         print("Checking resource {resource_name} for consistency"
               .format(resource_name=self.resource_name), file=sys.stderr)
+
         self.formatter.head()
 
-        # Step 1:
-        # Check if Resource is accessible for current user and get details
         resource = self.get_resource(self.resource_name)
-        root, hiera = self.find_root(resource)
+        root, ancestors = self.find_root(resource)
         self.root = root
-        for storage, vault, hiera_str in self.find_storage(resource, hiera):
-            self.vault = vault
-            self.hiera = hiera_str
-            self.storage = storage
+        for leaf, hiera in self.find_leaves(resource, ancestors):
+            self.vault = leaf[Resource.vault_path]
+            self.hiera = ";".join(hiera)
             self.check_collections()
 
-    def check_collections(self):
-        # Step 3:
-        # Recursively go over every collection
-        # in the root resource and do the following checks:
-        # a) Does the directory exist in the vault?
-        # b) If it is a file do the file sizes match with iRODS?
-        # c) If it is a file with a checksum, do the checksums match?
-        # Call the dataformatter for every result.
-        collections = (
-            (coll[Collection.id], coll[Collection.name])
-            for coll
-            in (self.session.query(Collection.id, Collection.name)
-                .filter(Resource.id == self.root[Resource.id])
-                .all()
-                .rows)
-        )
+    def collections_in_root(self):
+        colls = (self.session.query(Collection.id, Collection.name)
+                 .filter(Resource.id == self.root[Resource.id])
+                 .all()
+                 .rows)
 
-        for coll_id, coll_name in collections:
-            found_on_disk = self.check_collection(coll_id, coll_name)
-            if not found_on_disk:
-                continue
+        for coll in colls:
+            yield coll[Collection.id], coll[Collection.name]
 
-            print("Checking data objects of collection {} in hierarchy: {}"
-                  .format(coll_name, self.hiera),
-                  file=sys.stderr)
-
-            data_objects = (
+    def data_objects_in_collection(self, coll_id):
+        data_objects = (
                 self.session.query(DataObject)
                 .filter(Collection.id == coll_id)
                 .filter(DataObject.resc_hier == self.hiera)
@@ -256,7 +266,28 @@ class ResourceCheck(Check):
                 .rows
             )
 
-            for data_object in data_objects:
+        for data_object in data_objects:
+            yield data_object
+
+    def check_collections(self):
+        zone_name = self.root[Resource.zone_name]
+        prefix = "/" + zone_name
+
+        for coll_id, coll_name in self.collections_in_root():
+            coll_path = coll_name.replace(prefix, self.vault)
+            status_on_disk = on_disk(coll_path)
+            result = Result(obj_path=coll_name,
+                            phy_path=coll_path,
+                            status=status_on_disk)
+            self.formatter(result)
+            if status_on_disk != Status.OK:
+                continue
+
+            print("Checking data objects of collection {} in hierarchy: {}"
+                  .format(coll_name, self.hiera),
+                  file=sys.stderr)
+
+            for data_object in self.data_objects_in_collection(coll_id):
                 obj_name = data_object[DataObject.name]
                 obj_path = coll_name + '/' + obj_name
                 phy_path = data_object[DataObject.path]
@@ -269,71 +300,8 @@ class ResourceCheck(Check):
                     if status == Status.OK:
                         status = object_checker.compare_checksums()
 
-                self.formatter.fmt(obj_path, phy_path, status)
-
-    def check_collection(self, coll_id, coll_name):
-        zone_name = self.root[Resource.zone_name]
-        prefix = "/" + zone_name
-        coll_path = coll_name.replace(prefix, self.vault)
-
-        try:
-            os.stat(coll_path)
-        except OSError as e:
-            if e.errno == errno.ENOENT:
-                return False
-            elif e.errno == errno.EACCES:
-                self.formatter.fmt(coll_name, coll_path, Status.ACCESS_DENIED)
-                return False
-            else:
-                raise
-
-        self.formatter.fmt(coll_name, coll_path, Status.OK)
-        return True
-
-    def check_data_object(self, data_object, obj_path):
-        phy_path = data_object[DataObject.path]
-
-        try:
-            statinfo = os.stat(phy_path)
-        except OSError as e:
-            if e.errno == errno.ENOENT:
-                return obj_path, phy_path, Status.NOT_EXISTING
-            elif e.errno == errno.EACCES:
-                return phy_path, Status.ACCESS_DENIED
-            else:
-                raise
-
-        # TODO: what about sparse files?
-        data_object_size = data_object[DataObject.size]
-        if data_object_size != statinfo.st_size:
-            return phy_path, Status.FILE_SIZE_MISMATCH
-
-        irods_checksum = data_object[DataObject.checksum]
-        if not irods_checksum:
-            return phy_path, Status.NO_CHECKSUM
-        else:
-            try:
-                f = open(phy_path, 'rb')
-            except OSError as e:
-                if e.errno == errno.EACCES:
-                    return phy_path, Status.ACCESS_DENIED
-                else:
-                    raise
-            else:
-                hsh = hashlib.sha256()
-                while True:
-                    chunk = f.read(CHUNK_SIZE)
-                    if chunk:
-                        hsh.update(chunk)
-                    else:
-                        break
-                phy_checksum = base64.b64encode(hsh.digest())
-            finally:
-                f.close()
-            if phy_checksum != irods_checksum:
-                return phy_path, Status.CHECKSUM_MISMATCH
-
-        return phy_path, Status.OK
+                result = Result(obj_path, phy_path, status)
+                self.formatter(result)
 
 
 class VaultCheck(Check):
@@ -343,16 +311,97 @@ class VaultCheck(Check):
         super(VaultCheck, self).__init__(session, fqdn)
         self.vault_path = vault_path
 
-    def run(self, session):
-        self.session = session
-        print("Checking vault at {path} for consistency".format(path=self.path),
+    def run(self):
+        print("Checking vault at {path} for consistency"
+              .format(path=self.vault_path),
               file=sys.stderr)
-        # Step 1:
-        # Check if the physical path is accessible for current user
-        self.vault = self.vault_path
-        # Step 2:
-        # Check if associated resource is accessible
-        self.get_resource_from_vault_path(self.vault_path)
+
+        path = self.vault_path
+        storage_resource = self.get_resource_from_phy_path(path)
+        while storage_resource is None:
+            path = os.path.dirname(path)
+            if path == '/':
+                sys.exit("Could not find iRODS resource containing {}"
+                         .format(self.vault_path))
+            storage_resource = self.get_resource_from_phy_path(path)
+
+        self.storage_resource = storage_resource
+        self.vault = storage_resource[Resource.vault_path]
+
+        self.root, ancestors = self.find_root(storage_resource)
+        hiera = ancestors + [storage_resource[Resource.name]]
+        self.hiera = ";".join(hiera)
+
+        for dirname, subdirs, filenames in os.walk(self.vault_path):
+            for subdir in subdirs:
+                phy_path = os.path.join(dirname, subdir)
+                collection, status = self.get_collection(phy_path)
+                if collection:
+                    obj_path = collection[Collection.name]
+                else:
+                    obj_path = "UNKNOWN"
+                result = Result(obj_path, phy_path, status)
+
+                self.formatter(result)
+
+            for filename in filenames:
+                phy_path = os.path.join(dirname, filename)
+                data_object, status = self.get_data_object(phy_path)
+                if data_object is None:
+                    result = Result(obj_path="UNKNOWN",
+                                    phy_path=phy_path,
+                                    status=status)
+                else:
+                    object_checker = ObjectChecker(data_object, phy_path)
+                    status = object_checker.compare_filesize()
+                    if status == Status.OK:
+                        status = object_checker.compare_checksums()
+
+                    result = Result(obj_path=data_object[DataObject.name],
+                                    phy_path=phy_path,
+                                    status=status)
+
+                self.formatter(result)
+
+    def get_collection(self, phy_path):
+        root_id = self.root[Resource.id]
+        vault_path = self.storage_resource[Resource.vault_path]
+        zone = self.root[Resource.zone_name]
+        prefix = '/' + zone
+        coll_name = phy_path.replace(vault_path, prefix)
+        try:
+            collection = (
+                self.session.query(Collection)
+                .filter(Collection.name == coll_name)
+                .filter(Resource.location == self.fqdn)
+                .filter(Resource.id == root_id)
+                .one()
+                )
+        except iexc.NoResultFound:
+            collection = None
+            status = Status.NOT_REGISTERED
+        else:
+            status = Status.OK
+
+        return collection, status
+
+
+    def get_data_object(self, phy_path):
+        try:
+            data_object = (
+                self.session.query(DataObject)
+                .filter(DataObject.path == phy_path)
+                .filter(DataObject.resc_hier == self.hiera)
+                .one()
+                 )
+        except iexc.NoResultFound:
+            status = Status.NOT_REGISTERED
+            data_object = None
+        else:
+            status = Status.OK
+
+        return data_object, status
+
         # Step 3:
         # Recursively go over every directory, subdirectory and file in the
         # vault and do the following checks:
