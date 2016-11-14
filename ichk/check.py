@@ -219,7 +219,7 @@ class Check(object):
             else:
                 print("Storage resource {} not on fqdn {}, but {}"
                       .format(resource[Resource.name], self.fqdn,
-                      resource[Resource.location]),
+                              resource[Resource.location]),
                       file=sys.stderr)
 
     def run(self):
@@ -348,18 +348,19 @@ class VaultCheck(Check):
                 phy_path = os.path.join(dirname, filename)
                 data_object, status = self.get_data_object(phy_path)
                 if data_object is None:
-                    result = Result(obj_path="UNKNOWN",
-                                    phy_path=phy_path,
-                                    status=status)
+                    obj_path = "UNKNOWN"
                 else:
                     object_checker = ObjectChecker(data_object, phy_path)
                     status = object_checker.compare_filesize()
                     if status == Status.OK:
                         status = object_checker.compare_checksums()
 
-                    result = Result(obj_path=data_object[DataObject.name],
-                                    phy_path=phy_path,
-                                    status=status)
+                    obj_path = "{}/{}".format(
+                        data_object[Collection.name],
+                        data_object[DataObject.name]
+                    )
+
+                result = Result(obj_path, phy_path, status)
 
                 self.formatter(result)
 
@@ -373,7 +374,6 @@ class VaultCheck(Check):
             collection = (
                 self.session.query(Collection)
                 .filter(Collection.name == coll_name)
-                .filter(Resource.location == self.fqdn)
                 .filter(Resource.id == root_id)
                 .one()
                 )
@@ -385,11 +385,10 @@ class VaultCheck(Check):
 
         return collection, status
 
-
     def get_data_object(self, phy_path):
         try:
             data_object = (
-                self.session.query(DataObject)
+                self.session.query(DataObject, Collection.name)
                 .filter(DataObject.path == phy_path)
                 .filter(DataObject.resc_hier == self.hiera)
                 .one()
