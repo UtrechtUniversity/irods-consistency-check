@@ -154,8 +154,11 @@ class Check(object):
 
     def get_resource_from_phy_path(self, phy_path):
         try:
-            resource = self.session.query(Resource).filter(
-                Resource.vault_path == phy_path).one()
+            resource = (self.session.query(Resource)
+                        .filter(Resource.vault_path == phy_path)
+                        .filter(Resource.location == self.fqdn)
+                        .one()
+                        )
         except iexc.NoResultFound:
             resource = None
         return resource
