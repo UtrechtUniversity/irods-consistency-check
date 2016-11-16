@@ -16,5 +16,5 @@ setup(
            'ichk = ichk.command:entry'
        ]
    },
-   version='0.2.1'
+   version='0.2.2'
 )

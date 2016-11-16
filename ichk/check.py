@@ -25,8 +25,13 @@ class Status(Enum):
     ACCESS_DENIED = 5       # This script was denied access to the file
     NO_CHECKSUM = 6         # iRODS has no checksum registered
 
+class ObjectType(Enum):
+    COLLECTION = 0
+    DATAOBJECT = 1
+    FILE = 2
+    DIRECTORY = 3
 
-Result = namedtuple('Result', 'obj_path phy_path status')
+Result = namedtuple('Result', 'obj_type obj_path phy_path status')
 
 
 def on_disk(path):
@@ -276,7 +281,8 @@ class ResourceCheck(Check):
         for coll_id, coll_name in self.collections_in_root():
             coll_path = coll_name.replace(prefix, self.vault)
             status_on_disk = on_disk(coll_path)
-            result = Result(obj_path=coll_name,
+            result = Result(obj_type=ObjectType.COLLECTION,
+                            obj_path=coll_name,
                             phy_path=coll_path,
                             status=status_on_disk)
             self.formatter(result)
@@ -300,7 +306,7 @@ class ResourceCheck(Check):
                     if status == Status.OK:
                         status = object_checker.compare_checksums()
 
-                result = Result(obj_path, phy_path, status)
+                result = Result(ObjectType.DATAOBJECT, obj_path, phy_path, status)
                 self.formatter(result)
 
 
@@ -340,7 +346,8 @@ class VaultCheck(Check):
                     obj_path = collection[Collection.name]
                 else:
                     obj_path = "UNKNOWN"
-                result = Result(obj_path, phy_path, status)
+                result = Result(
+                    ObjectType.DIRECTORY, obj_path, phy_path, status)
 
                 self.formatter(result)
 
@@ -360,7 +367,7 @@ class VaultCheck(Check):
                         data_object[DataObject.name]
                     )
 
-                result = Result(obj_path, phy_path, status)
+                result = Result(ObjectType.FILE, obj_path, phy_path, status)
 
                 self.formatter(result)
 

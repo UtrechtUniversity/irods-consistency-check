@@ -20,8 +20,9 @@ class HumanFormatter(Formatter):
     name = 'human'
     options = ['truncate']
     template = """----
+Type: {0.obj_type.name}
 iRODS path: {0.obj_path}
-Physical path:  {0.phy_path}
+Physical path: {0.phy_path}
 Status: {0.status.name}
 """
 
@@ -53,7 +54,11 @@ class CSVFormatter(Formatter):
             self.output, dialect=csv.excel)
 
     def head(self):
-        self.writer.writerow(('Status', 'Resource Path', 'Vault Path'))
+        self.writer.writerow(('Type', 'Status', 'iRODS Path', 'Physical Path'))
 
     def __call__(self, result):
-        self.writer.writerow(result)
+        self.writer.writerow(
+            (result.obj_type.name,
+             result.status.name,
+             result.obj_path,
+             result.phy_path))
