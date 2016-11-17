@@ -12,7 +12,6 @@ from ichk.formatters import Formatter
 from irods.models import Resource, Collection, DataObject
 import irods.exception as iexc
 
-ALGORITHMS = {'md5': hashlib.md5, 'sha2': hashlib.sha256}
 CHUNK_SIZE = 8192
 
 
@@ -107,15 +106,15 @@ class ObjectChecker(object):
             else:
                 raise
         else:
-            # iRODS returns checksums as base64 encoded string of the hash
-            # prepended with the name of the hash algorithm used, seperated
+            # iRODS returns sha256 checksums as base64 encoded string of
+            # the hash prefixed with sha2 and seperated
             # by a colon, ':'.
-            try:
-                algo, irods_checksum = irods_checksum.split(":")
-            except ValueError:
-                algo = 'md5'
-
-            hsh = ALGORITHMS[algo]()
+            # md5 checksums are not prefixed and not base64 encoded.
+            if irods_checksum.startswith("sha2:"):
+                irods_checksum = irods_checksum[5:]
+                hsh = hashlib.sha256()
+            else:
+                hsh = hashlib.md5()
 
             while True:
                 chunk = f.read(CHUNK_SIZE)
@@ -123,7 +122,8 @@ class ObjectChecker(object):
                     hsh.update(chunk)
                 else:
                     break
-            if algo = 'md5':
+
+            if hsh.name == 'md5':
                 phy_checksum = hsh.digest()
             else:
                 phy_checksum = base64.b64encode(hsh.digest())
