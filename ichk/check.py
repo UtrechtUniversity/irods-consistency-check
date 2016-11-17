@@ -107,7 +107,10 @@ class ObjectChecker(object):
             # iRODS returns checksums as base64 encoded string of the hash
             # prepended with the name of the hash algorithm used, seperated
             # by a colon, ':'.
-            algo, irods_checksum = irods_checksum.split(":")
+            try:
+                algo, irods_checksum = irods_checksum.split(":")
+            except ValueError:
+                algo = 'md5'
 
             hsh = ALGORITHMS[algo]()
 
@@ -117,7 +120,10 @@ class ObjectChecker(object):
                     hsh.update(chunk)
                 else:
                     break
-            phy_checksum = base64.b64encode(hsh.digest())
+            if algo = 'md5':
+                phy_checksum = hsh.digest()
+            else:
+                phy_checksum = base64.b64encode(hsh.digest())
         finally:
             f.close()
         if phy_checksum != irods_checksum:
