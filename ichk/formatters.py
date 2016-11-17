@@ -60,5 +60,5 @@ class CSVFormatter(Formatter):
         self.writer.writerow(
             (result.obj_type.name,
              result.status.name,
-             result.obj_path,
-             result.phy_path))
+             result.obj_path.encode('utf-8'),
+             result.phy_path.encode('utf-8')))

@@ -25,6 +25,9 @@ class Status(Enum):
     ACCESS_DENIED = 5       # This script was denied access to the file
     NO_CHECKSUM = 6         # iRODS has no checksum registered
 
+    __repr__(self):
+        return self.name
+
 class ObjectType(Enum):
     COLLECTION = 0
     DATAOBJECT = 1
@@ -299,7 +302,7 @@ class ResourceCheck(Check):
                 continue
 
             print("Checking data objects of collection {} in hierarchy: {}"
-                  .format(coll_name, self.hiera),
+                  .format(coll_name.encode('utf-8'), self.hiera),
                   file=sys.stderr)
 
             for data_object in self.data_objects_in_collection(coll_id):
@@ -372,8 +375,8 @@ class VaultCheck(Check):
                         status = object_checker.compare_checksums()
 
                     obj_path = "{}/{}".format(
-                        data_object[Collection.name],
-                        data_object[DataObject.name]
+                        data_object[Collection.name].encode('utf-8'),
+                        data_object[DataObject.name].encode('utf-8')
                     )
 
                 result = Result(ObjectType.FILE, obj_path, phy_path, status)
