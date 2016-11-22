@@ -24,7 +24,7 @@ class Status(Enum):
     ACCESS_DENIED = 5       # This script was denied access to the file
     NO_CHECKSUM = 6         # iRODS has no checksum registered
 
-    __repr__(self):
+    def __repr__(self):
         return self.name
 
 class ObjectType(Enum):
