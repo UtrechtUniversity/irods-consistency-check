@@ -406,17 +406,23 @@ class VaultCheck(Check):
 
     def get_data_object(self, phy_path):
         try:
-            data_object = (
+            result = (
                 self.session.query(DataObject, Collection.name)
                 .filter(DataObject.path == phy_path)
                 .filter(DataObject.resc_hier == self.hiera)
-                .one()
+                .all()
                  )
         except iexc.NoResultFound:
             status = Status.NOT_REGISTERED
             data_object = None
         else:
+            data_object = result[0]
             status = Status.OK
+
+        if len(result) > 1:
+            print("More than one result for phy_path {}".format(phy_path),
+                  file=sys.stderr)
+            print(result, file=sys.stderr)
 
         return data_object, status
 
