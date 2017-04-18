@@ -127,8 +127,8 @@ class ObjectChecker(object):
                 phy_checksum = hsh.digest()
             else:
                 phy_checksum = base64.b64encode(hsh.digest())
-        finally:
             f.close()
+
         if phy_checksum != irods_checksum:
             return Status.CHECKSUM_MISMATCH
 
@@ -266,31 +266,28 @@ class ResourceCheck(Check):
             self.check_collections()
 
     def collections_in_root(self):
-        colls = (self.session.query(Collection.id, Collection.name)
-                 .filter(Resource.id == self.root[Resource.id])
-                 .all()
-                 .rows)
-
-        for coll in colls:
-            yield coll[Collection.id], coll[Collection.name]
+        """Returns a generator for all the Collections in the root resource"""
+        return (self.session.query(Collection.id, Collection.name)
+                .filter(Resource.id == self.root[Resource.id])
+                .get_results()
+                )
 
     def data_objects_in_collection(self, coll_id):
-        data_objects = (
-                self.session.query(DataObject)
+        """Returns a generator for all data objects in a collection"""
+        return (self.session.query(DataObject)
                 .filter(Collection.id == coll_id)
                 .filter(DataObject.resc_hier == self.hiera)
-                .all()
-                .rows
-            )
-
-        for data_object in data_objects:
-            yield data_object
+                .get_results()
+                )
 
     def check_collections(self):
+        """Check every collection within the target resource for consistency"""
         zone_name = self.root[Resource.zone_name]
         prefix = "/" + zone_name
 
-        for coll_id, coll_name in self.collections_in_root():
+        for coll in self.collections_in_root():
+            coll_id = coll[Collection.id]
+            coll_name = coll[Collection.name]
             coll_path = coll_name.replace(prefix, self.vault)
             status_on_disk = on_disk(coll_path)
             result = Result(obj_type=ObjectType.COLLECTION,
@@ -410,27 +407,17 @@ class VaultCheck(Check):
                 self.session.query(DataObject, Collection.name)
                 .filter(DataObject.path == phy_path)
                 .filter(DataObject.resc_hier == self.hiera)
-                .all()
+                .first()
                  )
         except iexc.NoResultFound:
             status = Status.NOT_REGISTERED
             data_object = None
         else:
-            data_object = result[0]
-            status = Status.OK
-
-        if len(result) > 1:
-            print("More than one result for phy_path {}".format(phy_path),
-                  file=sys.stderr)
-            print(result, file=sys.stderr)
+            data_object = result
+            if data_object is None:
+                status = Status.NOT_REGISTERED
+            else:
+                status = Status.OK
 
         return data_object, status
 
-        # Step 3:
-        # Recursively go over every directory, subdirectory and file in the
-        # vault and do the following checks:
-        # a) Does the file or directory have an associated object in the
-        # resource?
-        # b) If it is a file do the file sizes match with iRODS?
-        # c) If it is a file with a checksum, do the checksums match?
-        # Call the dataformatter for every result.
