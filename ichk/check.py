@@ -299,7 +299,7 @@ class ResourceCheck(Check):
                 continue
 
             print("Checking data objects of collection {} in hierarchy: {}"
-                  .format(coll_name.encode('utf-8'), self.hiera),
+                  .format(coll_name, self.hiera),
                   file=sys.stderr)
 
             for data_object in self.data_objects_in_collection(coll_id):
@@ -372,8 +372,8 @@ class VaultCheck(Check):
                         status = object_checker.compare_checksums()
 
                     obj_path = "{}/{}".format(
-                        data_object[Collection.name].encode('utf-8'),
-                        data_object[DataObject.name].encode('utf-8')
+                        data_object[Collection.name],
+                        data_object[DataObject.name]
                     )
 
                 result = Result(ObjectType.FILE, obj_path, phy_path, status)
