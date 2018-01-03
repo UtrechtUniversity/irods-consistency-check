@@ -1,9 +1,11 @@
 """Formatters for output of checks"""
 
 from __future__ import print_function
-import six
+import sys
 
 class Formatter(object):
+
+    PY2 = (sys.version_info.major == 2)
 
     def __init__(self, output, **options):
         self.output = output
@@ -41,7 +43,7 @@ Status: {0.status.name}
         obj_type = result.obj_type.name
         status = result.status.name
         # python 2 format defaults to ASCII encoding, enforce UTF-8
-        if six.PY2:
+        if self.PY2:
             obj_path = result.obj_path.encode('utf-8')
             phy_path = result.phy_path.encode('utf-8')
         else:
@@ -67,7 +69,7 @@ class CSVFormatter(Formatter):
         self.writer.writerow(('Type', 'Status', 'iRODS Path', 'Physical Path'))
 
     def __call__(self, result):
-        if six.PY2:
+        if self.PY2:
             # python 2 defaults to ASCII encoding, enforce UTF-8
             self.writer.writerow(
                 (result.obj_type.name,
