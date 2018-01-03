@@ -1,7 +1,7 @@
 """Formatters for output of checks"""
 
 from __future__ import print_function
-
+import six
 
 class Formatter(object):
 
@@ -38,7 +38,17 @@ Status: {0.status.name}
         print("Results of consistency check\n\n", file=self.output)
 
     def __call__(self, result):
-        print(self.template.format(result),
+        obj_type = result.obj_type.name
+        status = result.status.name
+        # python 2 format defaults to ASCII encoding, enforce UTF-8
+        if six.PY2:
+            obj_path = result.obj_path.encode('utf-8')
+            phy_path = result.phy_path.encode('utf-8')
+        else:
+            obj_path = result.obj_path
+            phy_path = result.phy_path
+
+        print(self.template.format(**locals()),
               file=self.output)
 
 
@@ -57,8 +67,17 @@ class CSVFormatter(Formatter):
         self.writer.writerow(('Type', 'Status', 'iRODS Path', 'Physical Path'))
 
     def __call__(self, result):
-        self.writer.writerow(
-            (result.obj_type.name,
-             result.status.name,
-             result.obj_path.encode('utf-8'),
-             result.phy_path.encode('utf-8')))
+        if six.PY2:
+            # python 2 defaults to ASCII encoding, enforce UTF-8
+            self.writer.writerow(
+                (result.obj_type.name,
+                 result.status.name,
+                 result.obj_path.encode('utf-8'),
+                 result.phy_path.encode('utf-8')))
+        else:
+            self.writer.writerow(
+                (result.obj_type.name,
+                 result.status.name,
+                 result.obj_path,
+                 result.phy_path))
+
