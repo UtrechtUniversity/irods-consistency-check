@@ -22,10 +22,10 @@ class HumanFormatter(Formatter):
     name = 'human'
     options = ['truncate']
     template = """----
-Type: {0.obj_type.name}
-iRODS path: {0.obj_path}
-Physical path: {0.phy_path}
-Status: {0.status.name}
+Type: {obj_type}
+iRODS path: {obj_path}
+Physical path: {phy_path}
+Status: {status}
 """
 
     def __init__(self, output=None, truncate=None):
