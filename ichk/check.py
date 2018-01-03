@@ -13,7 +13,7 @@ from irods.models import Resource, Collection, DataObject
 import irods.exception as iexc
 
 CHUNK_SIZE = 8192
-
+PY2 = (sys.version_info.major == 2)
 
 class Status(Enum):
     OK = 0
@@ -298,8 +298,13 @@ class ResourceCheck(Check):
             if status_on_disk != Status.OK:
                 continue
 
-            print("Checking data objects of collection {} in hierarchy: {}"
+            if PY2:
+                print("Checking data objects of collection {} in hierarchy: {}"
                   .format(coll_name.encode('utf-8'), self.hiera),
+                  file=sys.stderr)
+            else:
+                print("Checking data objects of collection {} in hierarchy: {}"
+                  .format(coll_name, self.hiera),
                   file=sys.stderr)
 
             for data_object in self.data_objects_in_collection(coll_id):
@@ -371,10 +376,16 @@ class VaultCheck(Check):
                     if status == Status.OK:
                         status = object_checker.compare_checksums()
 
-                    obj_path = "{}/{}".format(
-                        data_object[Collection.name].encode('utf-8'),
-                        data_object[DataObject.name].encode('utf-8')
-                    )
+                    if PY2:
+                        obj_path = "{}/{}".format(
+                            data_object[Collection.name].encode('utf-8'),
+                            data_object[DataObject.name].encode('utf-8')
+                            )
+                    else:
+                        obj_path = "{}/{}".format(
+                            data_object[Collection.name],
+                            data_object[DataObject.name]
+                            )
 
                 result = Result(ObjectType.FILE, obj_path, phy_path, status)
 
