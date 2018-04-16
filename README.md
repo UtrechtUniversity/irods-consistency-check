@@ -10,7 +10,11 @@ This project contains a setup.py file which supports both python 2.7 or python 3
 with pip. Just run the following command in the same directory as setup.py (The root of this repo):
 
 
-`pip install .`
+```bash
+virtualenv --no-site-packages default
+. default/bin/activate
+pip install .
+```
 
 When using a virtual environment, make sure that the irods system user has access to this environment.
 
@@ -62,6 +66,3 @@ The result of the check are displayed with the following keywords:
 * CHECKSUM MISMATCH:  This object does not have the same checksum as registered in the iRODS catalog.
 * ACCESS DENIED:  The current user has no access to this object in the vault path.
 * NO CHECKSUM:  There is no checksum registered in the iRODS catalog. This implies that file sizes do match.
-
-
-
