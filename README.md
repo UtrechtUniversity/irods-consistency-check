@@ -1,28 +1,26 @@
 # irods-consistency-check
-Check consistency between irods resource in the catalog and the files on-disk. The ichk command needs to be installed
-on the same machine as the irods resource holds its data. It can run in two modes. In the resource mode every
+Check consistency between iRODS resource in the catalog and the files on-disk. The ichk command needs to be installed
+on the same machine as the iRODS resource holds its data. It can run in two modes. In the resource mode every
 collection and data object will be checked if they are present on disk in the vault path. When a data object
 has a registered checksum, this checksum will be compared to the file on disk. It will output it's results in either
-a human-readable form or as csv (Comma-seperated values).
+a human-readable form or as CSV (Comma-separated values).
 
-## installation
+## Installation
 This project contains a setup.py file which supports both python 2.7 or python 3.5+ environments. Installation is easiest
-with pip. Just run the following command in the same directory as setup.py (The root of this repo):
-
+with pip. Just run the following commands:
 
 ```bash
 virtualenv --no-site-packages default
 . default/bin/activate
-pip install .
+pip install git+https://github.com/UtrechtUniversity/irods-consistency-check.git
 ```
 
-When using a virtual environment, make sure that the irods system user has access to this environment.
+When using a virtual environment, make sure that the iRODS system user has access to this environment.
 
-## usage
-
-When the installation was succesful, the ichk command will be available. It extracts the credentials and irods settings
-from the irods environment file of the current user. This environment file can be (re-)created with the iinit command.
- This user should also have access to the files in the vault path directly. The commandline switches are displayed below:
+## Usage
+When the installation was successful, the ichk command will be available. It extracts the credentials and iRODS settings
+from the iRODS environment file of the current user. This environment file can be (re-)created with the iinit command.
+ This user should also have access to the files in the vault path directly. The command line switches are displayed below:
 
 
 ```
@@ -47,7 +45,8 @@ from the irods environment file of the current user. This environment file can b
                          Truncate the output to the width of the console
 ```
 
-You need to either supply a resource or a vault path, but not both. The fqdn (fully qualified domain name) defaults to the fqdn of the current machine.
+You need to either supply a resource or a vault path, but not both.
+The FQDN (fully qualified domain name) defaults to the FQDN of the current machine.
 When composable resources are used, the ichk command will scan for leaf resources starting from the given resource.
 
 ## return values
