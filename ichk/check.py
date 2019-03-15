@@ -402,16 +402,16 @@ class VaultCheck(Check):
                 self.formatter(result)
 
     def get_collection(self, phy_path):
-        root_id = self.root[Resource.id]
+        resource_id = self.storage_resource[Resource.id]
         vault_path = self.storage_resource[Resource.vault_path]
         zone = self.root[Resource.zone_name]
         prefix = '/' + zone
         coll_name = phy_path.replace(vault_path, prefix)
         try:
             collection = (
-                self.session.query(Collection)
+                self.session.query(Collection.name, Resource.id)
                 .filter(Collection.name == coll_name)
-                .filter(Resource.id == root_id)
+                .filter(Resource.id == resource_id)
                 .one()
                 )
         except iexc.NoResultFound:
