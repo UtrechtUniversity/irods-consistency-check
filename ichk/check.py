@@ -63,7 +63,6 @@ class ObjectChecker(object):
     def statinfo(self):
         if self._statinfo:
             return self._statinfo
-
         try:
             statinfo = os.stat(self.phy_path)
         except OSError as e:
@@ -166,16 +165,6 @@ class Check(object):
             resource = None
         return resource
 
-    def get_resource_from_id(self, resource_id):
-        try:
-            resource = self.session.query(Resource).filter(
-                Resource.id == resource_id).one()
-        except iexc.NoResultFound:
-            print("No result found for a resource with id: {resource_id}"
-                  .format(**locals()),
-            resource = None
-        return resource
-
     def get_resource_from_phy_path(self, phy_path):
         try:
             resource = (self.session.query(Resource)
@@ -212,8 +201,13 @@ class Check(object):
                       file=sys.stderr)
                 return resource
             else:
-                ancestors.append(parent)
-                return climb(self.get_resource_from_id(parent))
+                ancestor = (
+                    self.session.query(Resource.id, Resource.name)
+                    .filter(Resource.id == parent)
+                    .one()
+                    )
+                ancestors.append(ancestor[Resource.name])
+                return climb(self.get_resource(ancestor[Resource.name]))
 
         root = climb(resource)
         ancestors.reverse()
@@ -409,11 +403,11 @@ class VaultCheck(Check):
         coll_name = phy_path.replace(vault_path, prefix)
         try:
             collection = (
-                self.session.query(Collection.name, Resource.id)
+                self.session.query(Collection, Resource.id)
                 .filter(Collection.name == coll_name)
                 .filter(Resource.id == resource_id)
                 .one()
-                )
+		        )
         except iexc.NoResultFound:
             collection = None
             status = Status.NOT_REGISTERED
@@ -429,7 +423,7 @@ class VaultCheck(Check):
                 .filter(DataObject.path == phy_path)
                 .filter(DataObject.resc_hier == self.hiera)
                 .first()
-                 )
+                )
         except iexc.NoResultFound:
             status = Status.NOT_REGISTERED
             data_object = None
