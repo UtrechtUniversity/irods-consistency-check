@@ -166,6 +166,16 @@ class Check(object):
             resource = None
         return resource
 
+    def get_resource_from_id(self, resource_id):
+        try:
+            resource = self.session.query(Resource).filter(
+                Resource.id == resource_id).one()
+        except iexc.NoResultFound:
+            print("No result found for a resource with id: {resource_id}"
+                  .format(**locals()),
+            resource = None
+        return resource
+
     def get_resource_from_phy_path(self, phy_path):
         try:
             resource = (self.session.query(Resource)
@@ -203,7 +213,7 @@ class Check(object):
                 return resource
             else:
                 ancestors.append(parent)
-                return climb(self.get_resource(parent))
+                return climb(self.get_resource_from_id(parent))
 
         root = climb(resource)
         ancestors.reverse()
@@ -431,4 +441,3 @@ class VaultCheck(Check):
                 status = Status.OK
 
         return data_object, status
-
