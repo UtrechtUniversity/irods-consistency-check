@@ -263,7 +263,7 @@ class ResourceCheck(Check):
 
         resource = self.get_resource(self.resource_name)
         root, ancestors = self.find_root(resource)
-        self.root = root
+        self.root = resource
         for leaf, hiera in self.find_leaves(resource, ancestors):
             self.vault = leaf[Resource.vault_path]
             self.hiera = ";".join(hiera)
