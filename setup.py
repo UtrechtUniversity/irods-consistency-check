@@ -1,9 +1,9 @@
 from setuptools import setup
 
 setup(
-   author="Paul Frederiks",
-   author_email="p.frederiks@uu.nl",
-   description=('Check consistency of irods database and vault'),
+   author="Paul Frederiks, Lazlo Westerhof",
+   author_email="p.frederiks@uu.nl, l.r.westerhof@uu.nl",
+   description=('Check consistency of iRODS database and vault'),
    install_requires=[
        'python-irodsclient',
        'enum34',
@@ -16,5 +16,5 @@ setup(
            'ichk = ichk.command:entry'
        ]
    },
-   version='0.3.0'
+   version='0.3.1'
 )
