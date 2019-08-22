@@ -29,6 +29,9 @@ def entry():
                         help="Output format", choices=['human', 'csv'])
     parser.add_argument("-t", "--truncate", default=False,
                         help="Truncate the output to the width of the console")
+    parser.add_argument("-T", "--timeout", default=10*60, type=int,
+                        help="Sets the maximum amount of seconds to wait for server responses"
+                            +", default 600. Increase this to account for longer-running queries.")
 
     args = parser.parse_args()
 
@@ -39,6 +42,8 @@ def entry():
         args.fqdn = socket.getfqdn()
 
     session = setup_session()
+
+    session.connection_timeout = args.timeout
 
     run(session, args)
 
