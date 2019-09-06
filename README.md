@@ -52,7 +52,7 @@ The command line switches are displayed below:
                          Sets the maximum amount of seconds to wait for server
                          responses, default 600. Increase this to account for
                          longer-running queries.
-   -s COLLECTION, --set-root-collection COLLECTION
+   -s COLLECTION, --root-collection COLLECTION
                          Only check this collection and its subcollections, rather
                          than all collections.
 

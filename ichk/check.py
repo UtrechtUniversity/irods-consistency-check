@@ -10,7 +10,7 @@ from itertools import chain
 import hashlib
 import base64
 from ichk.formatters import Formatter
-from irods.column import Criterion
+from irods.column import Like
 from irods.models import Resource, Collection, DataObject
 import irods.exception as iexc
 
@@ -141,20 +141,14 @@ class Check(object):
     def __init__(self, session, fqdn, root_collection):
         self.fqdn = fqdn
         self.session = session
-        self.set_root_collection(root_collection)
-
-    def set_root_collection(self, root_collection):
-        if root_collection is None:
-            self.root_collection = None
-        else:
+        if root_collection is not None:
             found_collection = (self.session.query(Collection.id, Collection.name)
                         .filter(Collection.name == root_collection)
-                        .get_results()
-                        )
-            if len(list(found_collection)) == 1:
-                self.root_collection = root_collection
-            else:
-                raise ValueError ("Root collection {} not found.".format(root_collection))
+                        .get_results())
+            if len(list(found_collection)) != 1:
+                raise ValueError("Root collection {} not found.".format(root_collection))
+
+        self.root_collection = root_collection
 
     def setformatter(self, output=None, fmt=None, **options):
         """Use different formatters based on fmt Argument"""
@@ -285,9 +279,9 @@ class ResourceCheck(Check):
             self.hiera = ";".join(hiera)
             self.check_collections()
 
-    def collections_in_root(self, root_collection):
+    def collections_in_root(self):
         """Returns a generator for all the Collections in the root resource"""
-        if root_collection is None:
+        if self.root_collection is None:
             return (self.session.query(Collection.id, Collection.name)
                     .filter(Resource.id == self.root[Resource.id])
                     .get_results()
@@ -295,15 +289,15 @@ class ResourceCheck(Check):
         else:
             generator_collection = (self.session.query(Collection.id, Collection.name)
                     .filter(Resource.id == self.root[Resource.id])
-                    .filter(Collection.name == root_collection)
+                    .filter(Collection.name == self.root_collection)
                     .get_results()
                     )
             generator_subcollections = (self.session.query(Collection.id, Collection.name)
                     .filter(Resource.id == self.root[Resource.id])
-                    .filter(Criterion('like', Collection.name, (root_collection+"/%%")))
+                    .filter(Like(Collection.name, self.root_collection + "/%%"))
                     .get_results()
                     )
-            return(chain(generator_collection,generator_subcollections))
+            return chain(generator_collection, generator_subcollections)
 
     def data_objects_in_collection(self, coll_id):
         """Returns a generator for all data objects in a collection"""
@@ -318,7 +312,7 @@ class ResourceCheck(Check):
         zone_name = self.root[Resource.zone_name]
         prefix = "/" + zone_name
 
-        for coll in self.collections_in_root(self.root_collection):
+        for coll in self.collections_in_root():
             coll_id = coll[Collection.id]
             coll_name = coll[Collection.name]
             coll_path = coll_name.replace(prefix, self.vault)
@@ -388,7 +382,7 @@ class VaultCheck(Check):
         if self.root_collection is None:
             path_to_walk = self.vault_path
         else:
-            path_to_walk = self.root_collection.replace("/" + self.root[Resource.zone_name], self.vault_path)
+            path_to_walk = self.root_collection.replace("/" + self.root[Resource.zone_name], self.vault_path, 1)
 
         for dirname, subdirs, filenames in os.walk(path_to_walk):
 
