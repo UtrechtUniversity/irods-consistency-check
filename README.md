@@ -29,8 +29,8 @@ This user should also have access to the files in the vault path directly.
 
 The command line switches are displayed below:
 ```
- usage: ichk [-h] [-f FQDN] (-r RESOURCE | -v VAULT) [-o OUTPUT]
-             [-m {human,csv}] [-t TRUNCATE] [-T TIMEOUT]
+ usage: ichk [-h] [-f FQDN] (-r RESOURCE | -v VAULT ) [-o OUTPUT]
+             [-m {human,csv}] [-t TRUNCATE] [-T TIMEOUT] [-s COLLECTION]
 
  Check recursively if an iRods resource is consistent with its vault or vice
  versa
@@ -52,6 +52,9 @@ The command line switches are displayed below:
                          Sets the maximum amount of seconds to wait for server
                          responses, default 600. Increase this to account for
                          longer-running queries.
+   -s COLLECTION, --root-collection COLLECTION
+                         Only check this collection and its subcollections, rather
+                         than all collections.
 
 ```
 

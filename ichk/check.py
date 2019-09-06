@@ -6,9 +6,11 @@ import os
 import errno
 from enum import Enum
 from collections import namedtuple
+from itertools import chain
 import hashlib
 import base64
 from ichk.formatters import Formatter
+from irods.column import Like
 from irods.models import Resource, Collection, DataObject
 import irods.exception as iexc
 
@@ -136,9 +138,17 @@ class ObjectChecker(object):
 
 class Check(object):
 
-    def __init__(self, session, fqdn):
+    def __init__(self, session, fqdn, root_collection):
         self.fqdn = fqdn
         self.session = session
+        if root_collection is not None:
+            found_collection = (self.session.query(Collection.id, Collection.name)
+                        .filter(Collection.name == root_collection)
+                        .get_results())
+            if len(list(found_collection)) != 1:
+                raise ValueError("Root collection {} not found.".format(root_collection))
+
+        self.root_collection = root_collection
 
     def setformatter(self, output=None, fmt=None, **options):
         """Use different formatters based on fmt Argument"""
@@ -251,8 +261,8 @@ class Check(object):
 class ResourceCheck(Check):
     """Starting from a Resource path. Check consistency of database"""
 
-    def __init__(self, session, fqdn, resource_name):
-        super(ResourceCheck, self).__init__(session, fqdn)
+    def __init__(self, session, fqdn, resource_name, root_collection):
+        super(ResourceCheck, self).__init__(session, fqdn, root_collection)
         self.resource_name = resource_name
 
     def run(self):
@@ -271,10 +281,23 @@ class ResourceCheck(Check):
 
     def collections_in_root(self):
         """Returns a generator for all the Collections in the root resource"""
-        return (self.session.query(Collection.id, Collection.name)
-                .filter(Resource.id == self.root[Resource.id])
-                .get_results()
-                )
+        if self.root_collection is None:
+            return (self.session.query(Collection.id, Collection.name)
+                    .filter(Resource.id == self.root[Resource.id])
+                    .get_results()
+                    )
+        else:
+            generator_collection = (self.session.query(Collection.id, Collection.name)
+                    .filter(Resource.id == self.root[Resource.id])
+                    .filter(Collection.name == self.root_collection)
+                    .get_results()
+                    )
+            generator_subcollections = (self.session.query(Collection.id, Collection.name)
+                    .filter(Resource.id == self.root[Resource.id])
+                    .filter(Like(Collection.name, self.root_collection + "/%%"))
+                    .get_results()
+                    )
+            return chain(generator_collection, generator_subcollections)
 
     def data_objects_in_collection(self, coll_id):
         """Returns a generator for all data objects in a collection"""
@@ -331,8 +354,8 @@ class ResourceCheck(Check):
 class VaultCheck(Check):
     """Starting from a physical vault path check for consistency"""
 
-    def __init__(self, session, fqdn, vault_path):
-        super(VaultCheck, self).__init__(session, fqdn)
+    def __init__(self, session, fqdn, vault_path, root_collection):
+        super(VaultCheck, self).__init__(session, fqdn, root_collection)
         self.vault_path = vault_path
 
     def run(self):
@@ -356,7 +379,13 @@ class VaultCheck(Check):
         hiera = ancestors + [storage_resource[Resource.name]]
         self.hiera = ";".join(hiera)
 
-        for dirname, subdirs, filenames in os.walk(self.vault_path):
+        if self.root_collection is None:
+            path_to_walk = self.vault_path
+        else:
+            path_to_walk = self.root_collection.replace("/" + self.root[Resource.zone_name], self.vault_path, 1)
+
+        for dirname, subdirs, filenames in os.walk(path_to_walk):
+
             for subdir in subdirs:
                 phy_path = os.path.join(dirname, subdir)
                 collection, status = self.get_collection(phy_path)

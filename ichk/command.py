@@ -32,6 +32,8 @@ def entry():
     parser.add_argument("-T", "--timeout", default=10*60, type=int,
                         help="Sets the maximum amount of seconds to wait for server responses"
                             +", default 600. Increase this to account for longer-running queries.")
+    parser.add_argument("-s", "--root-collection", dest='root_collection', default=None,
+                        help="Only check a particular collection and its subcollections.")
 
     args = parser.parse_args()
 
@@ -88,9 +90,9 @@ def setup_session():
 
 def run(session, args):
     if args.resource:
-        executor = check.ResourceCheck(session, args.fqdn, args.resource)
+        executor = check.ResourceCheck(session, args.fqdn, args.resource, args.root_collection)
     else:
-        executor = check.VaultCheck(session, args.fqdn, args.vault)
+        executor = check.VaultCheck(session, args.fqdn, args.vault, args.root_collection)
 
     options = {'output': args.output or sys.stdout, 'fmt': args.fmt}
     if args.truncate:
