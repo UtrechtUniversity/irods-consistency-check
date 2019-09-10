@@ -127,7 +127,7 @@ class ObjectChecker(object):
             if hsh.name == 'md5':
                 phy_checksum = hsh.hexdigest()
             else:
-                phy_checksum = base64.b64encode(hsh.digest())
+                phy_checksum = base64.b64encode(hsh.digest()).decode('ascii')
             f.close()
 
         if phy_checksum != irods_checksum:
