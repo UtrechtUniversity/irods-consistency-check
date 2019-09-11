@@ -34,6 +34,11 @@ def entry():
                             +", default 600. Increase this to account for longer-running queries.")
     parser.add_argument("-s", "--root-collection", dest='root_collection', default=None,
                         help="Only check a particular collection and its subcollections.")
+    parser.add_argument("-a", "--show-size-checksum", default=False, action='store_const', const=True,
+                        help="Show expected versus observed object size or checksum in case of differences. "
+                            +"Note that checksums are not verified if the observed size of the object is different from the expected size."
+                            +"If the output format is 'csv', compared size and checksum values are always printed, "
+                            +"irrespective of whether the expected value matches the observed value.")
 
     args = parser.parse_args()
 
@@ -94,7 +99,7 @@ def run(session, args):
     else:
         executor = check.VaultCheck(session, args.fqdn, args.vault, args.root_collection)
 
-    options = {'output': args.output or sys.stdout, 'fmt': args.fmt}
+    options = {'output': args.output or sys.stdout, 'fmt': args.fmt, 'show_size_checksum': args.show_size_checksum}
     if args.truncate:
         options['truncate'] = True
 

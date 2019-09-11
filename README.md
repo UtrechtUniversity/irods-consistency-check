@@ -30,7 +30,7 @@ This user should also have access to the files in the vault path directly.
 The command line switches are displayed below:
 ```
  usage: ichk [-h] [-f FQDN] (-r RESOURCE | -v VAULT ) [-o OUTPUT]
-             [-m {human,csv}] [-t TRUNCATE] [-T TIMEOUT] [-s COLLECTION]
+             [-m {human,csv}] [-t TRUNCATE] [-T TIMEOUT] [-s COLLECTION] [-a]
 
  Check recursively if an iRods resource is consistent with its vault or vice
  versa
@@ -55,6 +55,13 @@ The command line switches are displayed below:
    -s COLLECTION, --root-collection COLLECTION
                          Only check this collection and its subcollections, rather
                          than all collections.
+   -a, --show-size-checksum
+                        Show expected versus observed object size or checksum
+                        in case of differences. Note that checksums are not
+                        compared if observed object size is different from expected
+                        size. If output format is 'csv', compared size and
+                        checksum values are always printed, irrespective of
+                        whether the expected value matches the observed value.
 
 ```
 
@@ -62,14 +69,15 @@ You need to either supply a resource or a vault path, but not both.
 The FQDN (fully qualified domain name) defaults to the FQDN of the current machine.
 When composable resources are used, the ichk command will scan for leaf resources starting from the given resource.
 
-## Return values
+## Output
+
 The objects that are checked are categorized as follows:
 * COLLECTION
 * DATAOBJECT
 * DIRECTORY
 * FILE
 
-The result of the check are displayed with the following keywords:
+These status codes can be used to represent the result of the check:
 * OK
 * NOT EXISTING:  This object is found in the iRODS catalog, but is missing in the vault path.
 * NOT REGISTERED:  This object is found on the disk, but is missing from the iRODS catalog.
@@ -77,3 +85,13 @@ The result of the check are displayed with the following keywords:
 * CHECKSUM MISMATCH:  This object does not have the same checksum as registered in the iRODS catalog.
 * ACCESS DENIED:  The current user has no access to this object in the vault path.
 * NO CHECKSUM:  There is no checksum registered in the iRODS catalog. This implies that file sizes do match.
+
+The meaning of the fields in CSV output is:
+1. Object type
+2. Status code
+3. Logical path
+4. Vault path
+5. Observed checksum value (field only present if -a switch is used; field is empty for collections / directories, as well as for files / data objects with a size mismatch)
+6. Expected checksum value (field only present if -a switch is used; field is empty for collections / directories, as well as for files / data objects with a size mismatch)
+7. Observed object size (field only present if -a switch is used; field is empty for collections / directories)
+8. Expected checksum value (field only present if -a switch is used; field is empty for collections / directories)

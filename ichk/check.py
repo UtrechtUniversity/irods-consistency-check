@@ -35,7 +35,7 @@ class ObjectType(Enum):
     FILE = 2
     DIRECTORY = 3
 
-Result = namedtuple('Result', 'obj_type obj_path phy_path status')
+Result = namedtuple('Result', 'obj_type obj_path phy_path status observed_values')
 
 
 def on_disk(path):
@@ -89,21 +89,28 @@ class ObjectChecker(object):
         if isinstance(self.statinfo, Status):
             return self.statinfo
 
-        if data_object_size != self.statinfo.st_size:
-            return Status.FILE_SIZE_MISMATCH
+        info = {
+            'expected_filesize': str(data_object_size),
+            'observed_filesize': str(self.statinfo.st_size) }
 
-        return Status.OK
+        if data_object_size != self.statinfo.st_size:
+            return Status.FILE_SIZE_MISMATCH, info
+
+        return Status.OK, info
 
     def compare_checksums(self):
         irods_checksum = self.data_object[DataObject.checksum]
+        info = {
+            'expected_checksum': None,
+            'observed_checksum': None }
         if not irods_checksum:
-            return Status.NO_CHECKSUM
+            return Status.NO_CHECKSUM, info
 
         try:
             f = open(self.phy_path, 'rb')
         except OSError as e:
             if e.errno == errno.EACCES:
-                return Status.ACCESS_DENIED
+                return Status.ACCESS_DENIED, info
             else:
                 raise
         else:
@@ -130,10 +137,14 @@ class ObjectChecker(object):
                 phy_checksum = base64.b64encode(hsh.digest())
             f.close()
 
-        if phy_checksum != irods_checksum:
-            return Status.CHECKSUM_MISMATCH
+        info = {
+            'expected_checksum': irods_checksum,
+            'observed_checksum': phy_checksum }
 
-        return Status.OK
+        if phy_checksum != irods_checksum:
+            return Status.CHECKSUM_MISMATCH, info
+
+        return Status.OK, info
 
 
 class Check(object):
@@ -150,7 +161,7 @@ class Check(object):
 
         self.root_collection = root_collection
 
-    def setformatter(self, output=None, fmt=None, **options):
+    def setformatter(self, output=None, fmt=None, show_size_checksum=False, **options):
         """Use different formatters based on fmt Argument"""
         if (output is None) or (fmt is None):
             raise ValueError(
@@ -159,7 +170,7 @@ class Check(object):
         formatters = Formatter.__subclasses__()
         for formatter in formatters:
             if formatter.name == fmt:
-                self.formatter = formatter(output, **options)
+                self.formatter = formatter(output, show_size_checksum, **options)
                 break
         else:
             raise ValueError("Unknown formatter: {}".format(fmt))
@@ -320,7 +331,8 @@ class ResourceCheck(Check):
             result = Result(obj_type=ObjectType.COLLECTION,
                             obj_path=coll_name,
                             phy_path=coll_path,
-                            status=status_on_disk)
+                            status=status_on_disk,
+                            observed_values={})
             self.formatter(result)
             if status_on_disk != Status.OK:
                 continue
@@ -342,12 +354,15 @@ class ResourceCheck(Check):
                 object_checker = ObjectChecker(data_object, phy_path)
 
                 status = object_checker.exists_on_disk()
+                observed_values = {}
                 if status == Status.OK:
-                    status = object_checker.compare_filesize()
+                    status, observed_filesizes = object_checker.compare_filesize()
+                    observed_values.update(observed_filesizes)
                     if status == Status.OK:
-                        status = object_checker.compare_checksums()
+                        status, observed_checksums = object_checker.compare_checksums()
+                        observed_values.update(observed_checksums)
 
-                result = Result(ObjectType.DATAOBJECT, obj_path, phy_path, status)
+                result = Result(ObjectType.DATAOBJECT, obj_path, phy_path, status, observed_values)
                 self.formatter(result)
 
 
@@ -394,20 +409,23 @@ class VaultCheck(Check):
                 else:
                     obj_path = "UNKNOWN"
                 result = Result(
-                    ObjectType.DIRECTORY, obj_path, phy_path, status)
+                    ObjectType.DIRECTORY, obj_path, phy_path, status, {})
 
                 self.formatter(result)
 
             for filename in filenames:
                 phy_path = os.path.join(dirname, filename)
                 data_object, status = self.get_data_object(phy_path)
+                observed_values = {}
                 if data_object is None:
                     obj_path = "UNKNOWN"
                 else:
                     object_checker = ObjectChecker(data_object, phy_path)
-                    status = object_checker.compare_filesize()
+                    status, observed_filesizes = object_checker.compare_filesize()
+                    observed_values.update(observed_filesizes)
                     if status == Status.OK:
-                        status = object_checker.compare_checksums()
+                        status, observed_checksums = object_checker.compare_checksums()
+                        observed_values.update(observed_checksums)
 
                     if PY2:
                         obj_path = "{}/{}".format(
@@ -420,7 +438,7 @@ class VaultCheck(Check):
                             data_object[DataObject.name]
                             )
 
-                result = Result(ObjectType.FILE, obj_path, phy_path, status)
+                result = Result(ObjectType.FILE, obj_path, phy_path, status, observed_values)
 
                 self.formatter(result)
 
