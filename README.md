@@ -30,7 +30,7 @@ This user should also have access to the files in the vault path directly.
 The command line switches are displayed below:
 ```
  usage: ichk [-h] [-f FQDN] (-r RESOURCE | -v VAULT ) [-o OUTPUT]
-             [-m {human,csv}] [-t TRUNCATE] [-T TIMEOUT] [-s COLLECTION] [-a]
+             [-m {human,csv}] [-t TRUNCATE] [-T TIMEOUT] [-s COLLECTION]
 
  Check recursively if an iRods resource is consistent with its vault or vice
  versa
