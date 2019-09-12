@@ -7,9 +7,8 @@ class Formatter(object):
 
     PY2 = (sys.version_info.major == 2)
 
-    def __init__(self, output, show_size_checksum, **options):
+    def __init__(self, output, **options):
         self.output = output
-        self.show_size_checksum = show_size_checksum
 
     def head(self):
         raise NotImplementedError
@@ -28,13 +27,13 @@ iRODS path: {obj_path}
 Physical path: {phy_path}
 Status: {status}"""
 
-    def __init__(self, output=None, show_size_checksum = False, truncate=None):
+    def __init__(self, output=None, truncate=None):
         if truncate:
             # TODO: write routine to check column width of active terminal
             self.truncate = 179
         else:
             self.truncate = None
-        super(HumanFormatter, self).__init__(output=output, show_size_checksum = show_size_checksum)
+        super(HumanFormatter, self).__init__(output=output)
 
     def head(self):
         print("Results of consistency check\n\n", file=self.output)
@@ -56,23 +55,19 @@ Status: {status}"""
         def printl(message):
             print(message, file=self.output)
 
-        if self.show_size_checksum:
-            values = result.observed_values
+        values = result.observed_values
 
-            def printl(message):
-                print(message, file=self.output)
+        if ( 'expected_filesize' in values and
+             'observed_filesize' in values and
+             values['observed_filesize'] != values['expected_filesize'] ):
+            printl("Expected size: " + values['expected_filesize'])
+            printl("Observed size: " + values['observed_filesize'])
 
-            if ( 'expected_filesize' in values and
-                 'observed_filesize' in values and
-                  values['observed_filesize'] != values['expected_filesize'] ):
-                    printl("Expected size: " + values['expected_filesize'])
-                    printl("Observed size: " + values['observed_filesize'])
-
-            if ( 'expected_checksum' in values and
-                 'observed_checksum' in values and
-                  values['observed_checksum'] != values['expected_checksum'] ):
-                    printl("Expected checksum: " + values['expected_checksum'])
-                    printl("Observed checksum: " + values['observed_checksum'])
+        if ( 'expected_checksum' in values and
+             'observed_checksum' in values and
+             values['observed_checksum'] != values['expected_checksum'] ):
+            printl("Expected checksum: " + values['expected_checksum'])
+            printl("Observed checksum: " + values['observed_checksum'])
 
         printl("")
 
@@ -80,8 +75,8 @@ class CSVFormatter(Formatter):
     name = 'csv'
     options = []
 
-    def __init__(self, output=None, show_size_checksum=False):
-        super(CSVFormatter, self).__init__(output=output, show_size_checksum=show_size_checksum)
+    def __init__(self, output=None):
+        super(CSVFormatter, self).__init__(output=output)
 
         import csv
         self.writer = csv.writer(
@@ -105,20 +100,13 @@ class CSVFormatter(Formatter):
             else:
                 return ""
 
-        if self.show_size_checksum:
-            self.writer.writerow(
-                (result.obj_type.name,
-                 result.status.name,
-                 obj_path,
-                 phy_path,
-                 if_defined(result.observed_values, 'observed_checksum'),
-                 if_defined(result.observed_values, 'expected_checksum'),
-                 if_defined(result.observed_values, 'observed_filesize'),
-                 if_defined(result.observed_values, 'expected_filesize')))
-        else:
-            self.writer.writerow(
-                (result.obj_type.name,
-                 result.status.name,
-                 obj_path,
-                 phy_path))
+        self.writer.writerow(
+            (result.obj_type.name,
+             result.status.name,
+             obj_path,
+             phy_path,
+             if_defined(result.observed_values, 'observed_checksum'),
+             if_defined(result.observed_values, 'expected_checksum'),
+             if_defined(result.observed_values, 'observed_filesize'),
+             if_defined(result.observed_values, 'expected_filesize')))
 

@@ -55,14 +55,6 @@ The command line switches are displayed below:
    -s COLLECTION, --root-collection COLLECTION
                          Only check this collection and its subcollections, rather
                          than all collections.
-   -a, --show-size-checksum
-                        Show expected versus observed object size or checksum
-                        in case of differences. Note that checksums are not
-                        compared if observed object size is different from expected
-                        size. If output format is 'csv', compared size and
-                        checksum values are always printed, irrespective of
-                        whether the expected value matches the observed value.
-
 ```
 
 You need to either supply a resource or a vault path, but not both.
@@ -91,7 +83,7 @@ The meaning of the fields in CSV output is:
 2. Status code
 3. Logical path
 4. Vault path
-5. Observed checksum value (field only present if -a switch is used; field is empty for collections / directories, as well as for files / data objects with a size mismatch)
-6. Expected checksum value (field only present if -a switch is used; field is empty for collections / directories, as well as for files / data objects with a size mismatch)
-7. Observed object size (field only present if -a switch is used; field is empty for collections / directories)
-8. Expected checksum value (field only present if -a switch is used; field is empty for collections / directories)
+5. Observed checksum value (field is empty for collections / directories, as well as for files / data objects with a size mismatch)
+6. Expected checksum value (field is empty for collections / directories, as well as for files / data objects with a size mismatch)
+7. Observed object size (field is empty for collections / directories)
+8. Expected checksum value (field is empty for collections / directories)

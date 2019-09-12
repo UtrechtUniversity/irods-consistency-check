@@ -161,7 +161,7 @@ class Check(object):
 
         self.root_collection = root_collection
 
-    def setformatter(self, output=None, fmt=None, show_size_checksum=False, **options):
+    def setformatter(self, output=None, fmt=None, **options):
         """Use different formatters based on fmt Argument"""
         if (output is None) or (fmt is None):
             raise ValueError(
@@ -170,7 +170,7 @@ class Check(object):
         formatters = Formatter.__subclasses__()
         for formatter in formatters:
             if formatter.name == fmt:
-                self.formatter = formatter(output, show_size_checksum, **options)
+                self.formatter = formatter(output, **options)
                 break
         else:
             raise ValueError("Unknown formatter: {}".format(fmt))
