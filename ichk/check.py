@@ -376,6 +376,8 @@ class VaultCheck(Check):
               .format(path=self.vault_path),
               file=sys.stderr)
 
+        self.formatter.head()
+
         path = self.vault_path
         storage_resource = self.get_resource_from_phy_path(path)
         while storage_resource is None:
