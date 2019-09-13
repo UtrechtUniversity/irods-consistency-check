@@ -87,11 +87,11 @@ class ObjectChecker(object):
         # TODO: what about sparse files?
         data_object_size = self.data_object[DataObject.size]
         if isinstance(self.statinfo, Status):
-            return self.statinfo
+            return self.statinfo, {}
 
         info = {
-            'expected_filesize': str(data_object_size),
-            'observed_filesize': str(self.statinfo.st_size) }
+            'expected_filesize': data_object_size,
+            'observed_filesize': self.statinfo.st_size }
 
         if data_object_size != self.statinfo.st_size:
             return Status.FILE_SIZE_MISMATCH, info
@@ -100,9 +100,7 @@ class ObjectChecker(object):
 
     def compare_checksums(self):
         irods_checksum = self.data_object[DataObject.checksum]
-        info = {
-            'expected_checksum': None,
-            'observed_checksum': None }
+        info = {}
         if not irods_checksum:
             return Status.NO_CHECKSUM, info
 

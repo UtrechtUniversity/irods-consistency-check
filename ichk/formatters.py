@@ -1,6 +1,7 @@
 """Formatters for output of checks"""
 
 from __future__ import print_function
+from ichk import check
 import sys
 
 class Formatter(object):
@@ -49,23 +50,18 @@ Status: {status}"""
             obj_path = result.obj_path
             phy_path = result.phy_path
 
-        print(self.template.format(**locals()),
-              file=self.output)
-
         def printl(message):
             print(message, file=self.output)
 
+        printl(self.template.format(**locals()))
+
         values = result.observed_values
 
-        if ( 'expected_filesize' in values and
-             'observed_filesize' in values and
-             values['observed_filesize'] != values['expected_filesize'] ):
-            printl("Expected size: " + values['expected_filesize'])
-            printl("Observed size: " + values['observed_filesize'])
+        if result.status is check.Status.FILE_SIZE_MISMATCH:
+            printl("Expected size: " + str(values['expected_filesize']))
+            printl("Observed size: " + str(values['observed_filesize']))
 
-        if ( 'expected_checksum' in values and
-             'observed_checksum' in values and
-             values['observed_checksum'] != values['expected_checksum'] ):
+        if result.status is check.Status.CHECKSUM_MISMATCH:
             printl("Expected checksum: " + values['expected_checksum'])
             printl("Observed checksum: " + values['observed_checksum'])
 
@@ -83,7 +79,9 @@ class CSVFormatter(Formatter):
             self.output, dialect=csv.excel)
 
     def head(self):
-        self.writer.writerow(('Type', 'Status', 'iRODS Path', 'Physical Path'))
+        self.writer.writerow(('Type', 'Status', 'iRODS Path', 'Physical Path',
+                              'Observed checksum', 'Expected checksum',
+                              'Observed size', 'Expected size'))
 
     def __call__(self, result):
         if self.PY2:
@@ -94,19 +92,12 @@ class CSVFormatter(Formatter):
             obj_path = result.obj_path
             phy_path = result.phy_path
 
-        def if_defined(dct,index):
-            if index in dct and dct[index] != None:
-                return dct[index]
-            else:
-                return ""
-
         self.writer.writerow(
             (result.obj_type.name,
              result.status.name,
              obj_path,
              phy_path,
-             if_defined(result.observed_values, 'observed_checksum'),
-             if_defined(result.observed_values, 'expected_checksum'),
-             if_defined(result.observed_values, 'observed_filesize'),
-             if_defined(result.observed_values, 'expected_filesize')))
-
+             result.observed_values.get('observed_checksum', ''),
+             result.observed_values.get('expected_checksum', ''),
+             str(result.observed_values.get('observed_filesize', '')),
+             str(result.observed_values.get('expected_filesize', ''))))
