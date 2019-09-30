@@ -43,6 +43,9 @@ def entry():
         import socket
         args.fqdn = socket.getfqdn()
 
+    if args.root_collection is not None:
+        args.root_collection = args.root_collection.rstrip("/")
+
     session = setup_session()
 
     session.connection_timeout = args.timeout
