@@ -11,6 +11,7 @@ import hashlib
 import base64
 from ichk.formatters import Formatter
 from irods.column import Like
+from irods.data_object import irods_dirname, irods_basename
 from irods.models import Resource, Collection, DataObject
 import irods.exception as iexc
 
@@ -25,6 +26,9 @@ class Status(Enum):
     CHECKSUM_MISMATCH = 4   # Checksums do not match between database and vault
     ACCESS_DENIED = 5       # This script was denied access to the file
     NO_CHECKSUM = 6         # iRODS has no checksum registered
+    NO_LOCAL_REPLICA = 7    # No replica of data object present on server (object list check)
+    NOT_FOUND = 8           # Object not found in iRODS (object list check)
+    REPLICA_IS_DIRTY = 9    # Replica is dirty / stale (object list check)
 
     def __repr__(self):
         return self.name
@@ -482,3 +486,84 @@ class VaultCheck(Check):
                 status = Status.OK
 
         return data_object, status
+
+
+class ObjectListCheck(Check):
+    """Check all local replicas of a list of objects"""
+
+    def __init__(self, session, fqdn, object_list_file):
+        super(ObjectListCheck, self).__init__(session, fqdn, None)
+        self.object_list_file = object_list_file
+        self.resource_locality_lookup = self._gen_resource_locality_lookup()
+
+    def _gen_resource_locality_lookup(self):
+        result = {}
+        resources = self.session.query(Resource.name, Resource.location)
+        for resource in resources:
+            result[resource[Resource.name]
+                   ] = resource[Resource.location] == self.fqdn
+        return result
+
+    def _is_local_resource(self, resource_name):
+        return self.resource_locality_lookup[resource_name]
+
+    def _check_object(self, object_name):
+
+        def _not_found():
+            result = Result(ObjectType.DATAOBJECT, object_name,
+                            "", Status.NOT_FOUND, {})
+            self.formatter(result)
+            return
+
+        try:
+            collection = self.session.collections.get(
+                irods_dirname(object_name))
+            objects = self.session.query(DataObject).filter(
+                DataObject.name == irods_basename(object_name)).filter(
+                DataObject.collection_id == collection.id).all()
+        except (iexc.NoResultFound, iexc.CollectionDoesNotExist):
+            _not_found()
+            return
+
+        if len(objects) == 0:
+            _not_found()
+            return
+
+        results_found = False
+
+        for object in objects:
+            if self._is_local_resource(object[DataObject.resource_name]):
+                object_checker = ObjectChecker(object, object[DataObject.path])
+                status = object_checker.exists_on_disk()
+                observed_values = {}
+                if status == Status.OK:
+                    if object[DataObject.replica_status] == "1":
+                        # Replica has normal state: not dirty
+                        status, observed_filesizes = object_checker.compare_filesize()
+                        observed_values.update(observed_filesizes)
+                        if status == Status.OK:
+                            status, observed_checksums = object_checker.compare_checksums()
+                            observed_values.update(observed_checksums)
+                    else:
+                        # Replica is dirty
+                        status = Status.REPLICA_IS_DIRTY
+                result = Result(ObjectType.DATAOBJECT, object_name,
+                                object[DataObject.path], status, observed_values)
+                results_found = True
+
+        if not results_found:
+            result = Result(ObjectType.DATAOBJECT, object_name,
+                            "", Status.NO_LOCAL_REPLICA, {})
+
+        self.formatter(result)
+
+    def run(self):
+        print("Checking object list {} for consistency of local replicas"
+              .format(self.object_list_file),
+              file=sys.stderr)
+
+        self.formatter.head()
+
+        with open(self.object_list_file, "r") as list:
+            for line in list:
+                self._check_object(line.rstrip('\n'))

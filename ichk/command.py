@@ -1,5 +1,4 @@
-"""Check recursively if an iRods resource is consistent with its vault or
-vice versa"""
+"""Check consistency between iRODS data objects and files in vaults."""
 from __future__ import print_function
 import sys
 import os
@@ -18,11 +17,13 @@ def entry():
 
     parser.add_argument("-f", "--fqdn",
                         help="FQDN of resource")
-    resource_or_vault = parser.add_mutually_exclusive_group(required=True)
-    resource_or_vault.add_argument("-r", "--resource",
+    scan_type = parser.add_mutually_exclusive_group(required=True)
+    scan_type.add_argument("-r", "--resource",
                                    help="iRODS path of resource")
-    resource_or_vault.add_argument("-v", "--vault",
+    scan_type.add_argument("-v", "--vault",
                                    help="Physical path of the resource vault")
+    scan_type.add_argument("-l", "--data-object-list", dest='data_object_list_file', default=None,
+                                   help="Check replicas of a list of data objects on this server.")
     parser.add_argument("-o", "--output", type=argparse.FileType('w'),
                         help="Write output to file")
     parser.add_argument("-m", "--format", dest="fmt", default='human',
@@ -36,6 +37,10 @@ def entry():
                         help="Only check a particular collection and its subcollections.")
 
     args = parser.parse_args()
+
+    if args.root_collection is not None and args.data_object_list_file is not None:
+        print("Error: the --root-collection / -s and the --data-object-list / -l option can't be combined.")
+        sys.exit(1)
 
     if args.fqdn:
         pass
@@ -94,8 +99,13 @@ def setup_session():
 def run(session, args):
     if args.resource:
         executor = check.ResourceCheck(session, args.fqdn, args.resource, args.root_collection)
-    else:
+    elif args.vault:
         executor = check.VaultCheck(session, args.fqdn, args.vault, args.root_collection)
+    elif args.data_object_list_file:
+        executor = check.ObjectListCheck(session, args.fqdn, args.data_object_list_file)
+    else:
+        print("Error: unknown check type.", file=sys.stderr)
+        sys.exit(1)
 
     options = {'output': args.output or sys.stdout, 'fmt': args.fmt}
     if args.truncate:
