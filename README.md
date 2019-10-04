@@ -85,5 +85,5 @@ The meaning of the fields in CSV output is:
 4. Vault path
 5. Observed checksum value (field is empty for collections / directories, as well as for files / data objects with a size mismatch)
 6. Expected checksum value (field is empty for collections / directories, as well as for files / data objects with a size mismatch)
-7. Observed object size (field is empty for collections / directories)
-8. Expected checksum value (field is empty for collections / directories)
+7. Observed file size (field is empty for collections / directories)
+8. Expected file size (field is empty for collections / directories)
