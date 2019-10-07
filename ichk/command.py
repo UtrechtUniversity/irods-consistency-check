@@ -23,6 +23,7 @@ def entry():
     scan_type.add_argument("-v", "--vault",
                                    help="Physical path of the resource vault")
     scan_type.add_argument("-l", "--data-object-list", dest='data_object_list_file', default=None,
+                                   type=argparse.FileType('r'),
                                    help="Check replicas of a list of data objects on this server.")
     parser.add_argument("-o", "--output", type=argparse.FileType('w'),
                         help="Write output to file")
