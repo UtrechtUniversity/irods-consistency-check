@@ -564,6 +564,5 @@ class ObjectListCheck(Check):
 
         self.formatter.head()
 
-        with open(self.object_list_file, "r") as list:
-            for line in list:
-                self._check_object(line.rstrip('\n'))
+        for line in self.object_list_file:
+            self._check_object(line.rstrip('\n'))
