@@ -92,7 +92,7 @@ These status codes can be used to represent the result of the check:
 * NO CHECKSUM:  There is no checksum registered in the iRODS catalog. This implies that file sizes do match.
 * NO_LOCAL_REPLICA: No replica of data object present on server (only used for object list check)
 * NOT_FOUND: Object name not found in iRODS (only used for object list check)
-* REPLICA_IS_DIRTY: Replica is dirty / stale (only used for object list check)
+* REPLICA_IS_STALE : Replica is stale (i.e. out of date)
 
 
 The meaning of the fields in CSV output is:
