@@ -28,10 +28,11 @@ class Status(Enum):
     NO_CHECKSUM = 6         # iRODS has no checksum registered
     NO_LOCAL_REPLICA = 7    # No replica of data object present on server (object list check)
     NOT_FOUND = 8           # Object not found in iRODS (object list check)
-    REPLICA_IS_DIRTY = 9    # Replica is dirty / stale (object list check)
+    REPLICA_IS_STALE = 9    # Replica is stale
 
     def __repr__(self):
         return self.name
+
 
 class ObjectType(Enum):
     COLLECTION = 0
@@ -61,9 +62,48 @@ class ObjectChecker(object):
 
     def __init__(self, data_object, phy_path):
         self.data_object = data_object
-        self.obj_path = data_object[DataObject.path]
         self.phy_path = phy_path
         self._statinfo = None
+
+    def get_obj_name(self):
+        if PY2:
+            return "{}/{}".format(
+                self.data_object[Collection.name].encode('utf-8'),
+                self.data_object[DataObject.name].encode('utf-8')
+                )
+        else:
+            return "{}/{}".format(
+                self.data_object[Collection.name],
+                self.data_object[DataObject.name]
+                )
+
+    def get_result(self):
+        status = self.exists_on_disk()
+        observed_values = {}
+
+        if status == Status.OK:
+            # File exists on disk and is accessible
+            status, observed_filesizes = self.compare_filesize()
+            observed_values.update(observed_filesizes)
+            if status == Status.OK:
+                status, observed_checksums = self.compare_checksums()
+                observed_values.update(observed_checksums)
+
+            if self.data_object[DataObject.replica_status] == "1":
+                # Replica in a good state (i.e. not stale)
+                pass
+            elif self.data_object[DataObject.replica_status] == "0":
+                # Replica is stale. Override status message, but keep
+                # observed size / checksum values intact, since they could still be useful.
+                status = Status.REPLICA_IS_STALE
+            else:
+                # Note: once https://github.com/irods/irods/issues/4343 has been implemented, we'll
+                # need to add a state for dirty data objects.
+                raise ValueError("Unknown replica state {} for data object {}".format(
+                    self.data_object[DataObject.replica_status], self.get_obj_name()))
+
+        return Result(ObjectType.DATAOBJECT, self.get_obj_name(),
+                      self.phy_path, status, observed_values)
 
     @property
     def statinfo(self):
@@ -314,7 +354,7 @@ class ResourceCheck(Check):
 
     def data_objects_in_collection(self, coll_id):
         """Returns a generator for all data objects in a collection"""
-        return (self.session.query(DataObject)
+        return (self.session.query(DataObject, Collection.name)
                 .filter(Collection.id == coll_id)
                 .filter(DataObject.resc_hier == self.hiera)
                 .get_results()
@@ -341,30 +381,17 @@ class ResourceCheck(Check):
 
             if PY2:
                 print("Checking data objects of collection {} in hierarchy: {}"
-                  .format(coll_name.encode('utf-8'), self.hiera),
-                  file=sys.stderr)
+                      .format(coll_name.encode('utf-8'), self.hiera),
+                      file=sys.stderr)
             else:
                 print("Checking data objects of collection {} in hierarchy: {}"
-                  .format(coll_name, self.hiera),
-                  file=sys.stderr)
+                      .format(coll_name, self.hiera),
+                      file=sys.stderr)
 
             for data_object in self.data_objects_in_collection(coll_id):
-                obj_name = data_object[DataObject.name]
-                obj_path = coll_name + '/' + obj_name
                 phy_path = data_object[DataObject.path]
-
                 object_checker = ObjectChecker(data_object, phy_path)
-
-                status = object_checker.exists_on_disk()
-                observed_values = {}
-                if status == Status.OK:
-                    status, observed_filesizes = object_checker.compare_filesize()
-                    observed_values.update(observed_filesizes)
-                    if status == Status.OK:
-                        status, observed_checksums = object_checker.compare_checksums()
-                        observed_values.update(observed_checksums)
-
-                result = Result(ObjectType.DATAOBJECT, obj_path, phy_path, status, observed_values)
+                result = object_checker.get_result()
                 self.formatter(result)
 
 
@@ -421,29 +448,20 @@ class VaultCheck(Check):
                 phy_path = os.path.join(dirname, filename)
                 data_object, status = self.get_data_object(phy_path)
                 observed_values = {}
+
                 if data_object is None:
                     obj_path = "UNKNOWN"
+                    result = Result(
+                        ObjectType.FILE,
+                        obj_path,
+                        phy_path,
+                        status,
+                        observed_values)
                 else:
                     object_checker = ObjectChecker(data_object, phy_path)
-                    status, observed_filesizes = object_checker.compare_filesize()
-                    observed_values.update(observed_filesizes)
-                    if status == Status.OK:
-                        status, observed_checksums = object_checker.compare_checksums()
-                        observed_values.update(observed_checksums)
-
-                    if PY2:
-                        obj_path = "{}/{}".format(
-                            data_object[Collection.name].encode('utf-8'),
-                            data_object[DataObject.name].encode('utf-8')
-                            )
-                    else:
-                        obj_path = "{}/{}".format(
-                            data_object[Collection.name],
-                            data_object[DataObject.name]
-                            )
-
-                result = Result(ObjectType.FILE, obj_path, phy_path, status, observed_values)
-
+                    result = object_checker.get_result()
+                    # Override object type in Result - should be FILE
+                    result = Result (ObjectType.FILE, result.obj_path, result.phy_path, result.status, result.observed_values )
                 self.formatter(result)
 
     def get_collection(self, phy_path):
@@ -518,7 +536,7 @@ class ObjectListCheck(Check):
         try:
             collection = self.session.collections.get(
                 irods_dirname(object_name))
-            objects = self.session.query(DataObject).filter(
+            objects = self.session.query(DataObject, Collection.name).filter(
                 DataObject.name == irods_basename(object_name)).filter(
                 DataObject.collection_id == collection.id).all()
         except (iexc.NoResultFound, iexc.CollectionDoesNotExist):
@@ -534,21 +552,7 @@ class ObjectListCheck(Check):
         for object in objects:
             if self._is_local_resource(object[DataObject.resource_name]):
                 object_checker = ObjectChecker(object, object[DataObject.path])
-                status = object_checker.exists_on_disk()
-                observed_values = {}
-                if status == Status.OK:
-                    if object[DataObject.replica_status] == "1":
-                        # Replica has normal state: not dirty
-                        status, observed_filesizes = object_checker.compare_filesize()
-                        observed_values.update(observed_filesizes)
-                        if status == Status.OK:
-                            status, observed_checksums = object_checker.compare_checksums()
-                            observed_values.update(observed_checksums)
-                    else:
-                        # Replica is dirty
-                        status = Status.REPLICA_IS_DIRTY
-                result = Result(ObjectType.DATAOBJECT, object_name,
-                                object[DataObject.path], status, observed_values)
+                result = object_checker.get_result()
                 results_found = True
 
         if not results_found:
