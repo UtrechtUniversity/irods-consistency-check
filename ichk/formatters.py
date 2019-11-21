@@ -1,7 +1,7 @@
 """Formatters for output of checks"""
 
 from __future__ import print_function
-from ichk import check
+from ichk.enums import Status
 import sys
 
 
@@ -58,11 +58,11 @@ Status: {status}"""
 
         values = result.observed_values
 
-        if result.status is check.Status.FILE_SIZE_MISMATCH:
+        if result.status is Status.FILE_SIZE_MISMATCH:
             printl("Expected size: " + str(values['expected_filesize']))
             printl("Observed size: " + str(values['observed_filesize']))
 
-        if result.status is check.Status.CHECKSUM_MISMATCH:
+        if result.status is Status.CHECKSUM_MISMATCH:
             printl("Expected checksum: " + values['expected_checksum'])
             printl("Observed checksum: " + values['observed_checksum'])
 
