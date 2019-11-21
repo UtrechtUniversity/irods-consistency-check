@@ -4,6 +4,7 @@ from __future__ import print_function
 from ichk import check
 import sys
 
+
 class Formatter(object):
 
     PY2 = (sys.version_info.major == 2)
@@ -66,6 +67,7 @@ Status: {status}"""
             printl("Observed checksum: " + values['observed_checksum'])
 
         printl("")
+
 
 class CSVFormatter(Formatter):
     name = 'csv'

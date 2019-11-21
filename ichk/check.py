@@ -18,6 +18,7 @@ import irods.exception as iexc
 CHUNK_SIZE = 8192
 PY2 = (sys.version_info.major == 2)
 
+
 class Status(Enum):
     OK = 0
     NOT_EXISTING = 1        # File registered in iRODS but not found in vault
@@ -26,7 +27,8 @@ class Status(Enum):
     CHECKSUM_MISMATCH = 4   # Checksums do not match between database and vault
     ACCESS_DENIED = 5       # This script was denied access to the file
     NO_CHECKSUM = 6         # iRODS has no checksum registered
-    NO_LOCAL_REPLICA = 7    # No replica of data object present on server (object list check)
+    NO_LOCAL_REPLICA = 7    # No replica of data object present on server
+                            # (object list check)
     NOT_FOUND = 8           # Object not found in iRODS (object list check)
     REPLICA_IS_STALE = 9    # Replica is stale
 
@@ -40,7 +42,10 @@ class ObjectType(Enum):
     FILE = 2
     DIRECTORY = 3
 
-Result = namedtuple('Result', 'obj_type obj_path phy_path status observed_values')
+
+Result = namedtuple(
+    'Result',
+    'obj_type obj_path phy_path status observed_values')
 
 
 def on_disk(path):
@@ -70,12 +75,12 @@ class ObjectChecker(object):
             return "{}/{}".format(
                 self.data_object[Collection.name].encode('utf-8'),
                 self.data_object[DataObject.name].encode('utf-8')
-                )
+            )
         else:
             return "{}/{}".format(
                 self.data_object[Collection.name],
                 self.data_object[DataObject.name]
-                )
+            )
 
     def get_result(self):
         status = self.exists_on_disk()
@@ -94,7 +99,8 @@ class ObjectChecker(object):
                 pass
             elif self.data_object[DataObject.replica_status] == "0":
                 # Replica is stale. Override status message, but keep
-                # observed size / checksum values intact, since they could still be useful.
+                # observed size / checksum values intact, since they could
+                # still be useful.
                 status = Status.REPLICA_IS_STALE
             else:
                 # Note: once https://github.com/irods/irods/issues/4343 has been implemented, we'll
@@ -135,7 +141,7 @@ class ObjectChecker(object):
 
         info = {
             'expected_filesize': data_object_size,
-            'observed_filesize': self.statinfo.st_size }
+            'observed_filesize': self.statinfo.st_size}
 
         if data_object_size != self.statinfo.st_size:
             return Status.FILE_SIZE_MISMATCH, info
@@ -181,7 +187,7 @@ class ObjectChecker(object):
 
         info = {
             'expected_checksum': irods_checksum,
-            'observed_checksum': phy_checksum }
+            'observed_checksum': phy_checksum}
 
         if phy_checksum != irods_checksum:
             return Status.CHECKSUM_MISMATCH, info
@@ -196,10 +202,11 @@ class Check(object):
         self.session = session
         if root_collection is not None:
             found_collection = (self.session.query(Collection.id, Collection.name)
-                        .filter(Collection.name == root_collection)
-                        .get_results())
+                                .filter(Collection.name == root_collection)
+                                .get_results())
             if len(list(found_collection)) != 1:
-                raise ValueError("Root collection {} not found.".format(root_collection))
+                raise ValueError(
+                    "Root collection {} not found.".format(root_collection))
 
         self.root_collection = root_collection
 
@@ -268,7 +275,7 @@ class Check(object):
                     self.session.query(Resource.id, Resource.name)
                     .filter(Resource.id == parent)
                     .one()
-                    )
+                )
                 ancestors.append(ancestor[Resource.name])
                 return climb(self.get_resource(ancestor[Resource.name]))
 
@@ -341,15 +348,15 @@ class ResourceCheck(Check):
                     )
         else:
             generator_collection = (self.session.query(Collection.id, Collection.name)
-                    .filter(Resource.id == self.root[Resource.id])
-                    .filter(Collection.name == self.root_collection)
-                    .get_results()
-                    )
+                                    .filter(Resource.id == self.root[Resource.id])
+                                    .filter(Collection.name == self.root_collection)
+                                    .get_results()
+                                    )
             generator_subcollections = (self.session.query(Collection.id, Collection.name)
-                    .filter(Resource.id == self.root[Resource.id])
-                    .filter(Like(Collection.name, self.root_collection + "/%%"))
-                    .get_results()
-                    )
+                                        .filter(Resource.id == self.root[Resource.id])
+                                        .filter(Like(Collection.name, self.root_collection + "/%%"))
+                                        .get_results()
+                                        )
             return chain(generator_collection, generator_subcollections)
 
     def data_objects_in_collection(self, coll_id):
@@ -428,7 +435,8 @@ class VaultCheck(Check):
         if self.root_collection is None:
             path_to_walk = self.vault_path
         else:
-            path_to_walk = self.root_collection.replace("/" + self.root[Resource.zone_name], self.vault_path, 1)
+            path_to_walk = self.root_collection.replace(
+                "/" + self.root[Resource.zone_name], self.vault_path, 1)
 
         for dirname, subdirs, filenames in os.walk(path_to_walk):
 
@@ -461,7 +469,12 @@ class VaultCheck(Check):
                     object_checker = ObjectChecker(data_object, phy_path)
                     result = object_checker.get_result()
                     # Override object type in Result - should be FILE
-                    result = Result (ObjectType.FILE, result.obj_path, result.phy_path, result.status, result.observed_values )
+                    result = Result(
+                        ObjectType.FILE,
+                        result.obj_path,
+                        result.phy_path,
+                        result.status,
+                        result.observed_values)
                 self.formatter(result)
 
     def get_collection(self, phy_path):
@@ -476,7 +489,7 @@ class VaultCheck(Check):
                 .filter(Collection.name == coll_name)
                 .filter(Resource.id == resource_id)
                 .one()
-		        )
+            )
         except iexc.NoResultFound:
             collection = None
             status = Status.NOT_REGISTERED
@@ -492,7 +505,7 @@ class VaultCheck(Check):
                 .filter(DataObject.path == phy_path)
                 .filter(DataObject.resc_hier == self.hiera)
                 .first()
-                )
+            )
         except iexc.NoResultFound:
             status = Status.NOT_REGISTERED
             data_object = None
