@@ -1,4 +1,3 @@
-getpass
 python_irodsclient
 enum34
 six
