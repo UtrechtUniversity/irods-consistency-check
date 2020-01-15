@@ -56,8 +56,12 @@ def entry():
 
     session.connection_timeout = args.timeout
 
-    run(session, args)
-
+    try:
+        run(session, args)
+    except:
+        raise
+    finally:
+        session.cleanup()
 
 def setup_session():
     """Use irods environment files to configure a iRODSSession"""
