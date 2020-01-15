@@ -96,11 +96,8 @@ def setup_session():
     )
 
     session = iRODSSession(
-        host=irods_env["irods_host"],
-        port=irods_env["irods_port"],
-        user=irods_env["irods_user_name"],
         password=password,
-        zone=irods_env["irods_zone_name"],
+        **irods_env
     )
 
     return session
