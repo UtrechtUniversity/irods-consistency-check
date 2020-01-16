@@ -45,7 +45,7 @@ class ObjectType(Enum):
 
 Result = namedtuple(
     'Result',
-    'obj_type obj_path phy_path status observed_values')
+    'obj_type obj_path phy_path status observed_values resource')
 
 
 def on_disk(path):
@@ -109,7 +109,7 @@ class ObjectChecker(object):
                     self.data_object[DataObject.replica_status], self.get_obj_name()))
 
         return Result(ObjectType.DATAOBJECT, self.get_obj_name(),
-                      self.phy_path, status, observed_values)
+                      self.phy_path, status, observed_values, self.data_object[Resource.name])
 
     @property
     def statinfo(self):
@@ -361,7 +361,7 @@ class ResourceCheck(Check):
 
     def data_objects_in_collection(self, coll_id):
         """Returns a generator for all data objects in a collection"""
-        return (self.session.query(DataObject, Collection.name)
+        return (self.session.query(DataObject, Collection.name, Resource.name)
                 .filter(Collection.id == coll_id)
                 .filter(DataObject.resc_hier == self.hiera)
                 .get_results()
@@ -381,7 +381,8 @@ class ResourceCheck(Check):
                             obj_path=coll_name,
                             phy_path=coll_path,
                             status=status_on_disk,
-                            observed_values={})
+                            observed_values={},
+                            resource=None)
             self.formatter(result)
             if status_on_disk != Status.OK:
                 continue
@@ -448,7 +449,7 @@ class VaultCheck(Check):
                 else:
                     obj_path = "UNKNOWN"
                 result = Result(
-                    ObjectType.DIRECTORY, obj_path, phy_path, status, {})
+                    ObjectType.DIRECTORY, obj_path, phy_path, status, {}, None)
 
                 self.formatter(result)
 
@@ -464,7 +465,8 @@ class VaultCheck(Check):
                         obj_path,
                         phy_path,
                         status,
-                        observed_values)
+                        observed_values,
+                        None)
                 else:
                     object_checker = ObjectChecker(data_object, phy_path)
                     result = object_checker.get_result()
@@ -474,7 +476,8 @@ class VaultCheck(Check):
                         result.obj_path,
                         result.phy_path,
                         result.status,
-                        result.observed_values)
+                        result.observed_values,
+                        result.resource)
                 self.formatter(result)
 
     def get_collection(self, phy_path):
@@ -501,7 +504,7 @@ class VaultCheck(Check):
     def get_data_object(self, phy_path):
         try:
             result = (
-                self.session.query(DataObject, Collection.name)
+                self.session.query(DataObject, Collection.name, Resource.name)
                 .filter(DataObject.path == phy_path)
                 .filter(DataObject.resc_hier == self.hiera)
                 .first()
@@ -542,14 +545,14 @@ class ObjectListCheck(Check):
 
         def _not_found():
             result = Result(ObjectType.DATAOBJECT, object_name,
-                            "", Status.NOT_FOUND, {})
+                            "", Status.NOT_FOUND, {}, None)
             self.formatter(result)
             return
 
         try:
             collection = self.session.collections.get(
                 irods_dirname(object_name))
-            objects = self.session.query(DataObject, Collection.name).filter(
+            objects = self.session.query(DataObject, Collection.name, Resource.name).filter(
                 DataObject.name == irods_basename(object_name)).filter(
                 DataObject.collection_id == collection.id).all()
         except (iexc.NoResultFound, iexc.CollectionDoesNotExist):
@@ -570,7 +573,7 @@ class ObjectListCheck(Check):
 
         if not results_found:
             result = Result(ObjectType.DATAOBJECT, object_name,
-                            "", Status.NO_LOCAL_REPLICA, {})
+                            "", Status.NO_LOCAL_REPLICA, {}, None)
 
         self.formatter(result)
 
