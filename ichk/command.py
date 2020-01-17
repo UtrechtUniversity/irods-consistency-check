@@ -25,6 +25,10 @@ def entry():
     scan_type.add_argument("-l", "--data-object-list", dest='data_object_list_file', default=None,
                            type=argparse.FileType('r'),
                            help="Check replicas of a list of data objects on this server.")
+    scan_type.add_argument("--all-local-resources", action="store_true", default=False,
+                           help="Scan all unixfilesystem resources on this server")
+    scan_type.add_argument("--all-local-vaults", action="store_true", default=False,
+                           help="Scan all vaults of unixfilesystem resources on this server")
     parser.add_argument("-o", "--output", type=argparse.FileType('w'),
                         help="Write output to file")
     parser.add_argument("-m", "--format", dest="fmt", default='human',
@@ -57,6 +61,7 @@ def entry():
     session.connection_timeout = args.timeout
 
     run(session, args)
+
 
 
 def setup_session():
@@ -100,10 +105,16 @@ def setup_session():
 def run(session, args):
     if args.resource:
         executor = check.ResourceCheck(
-            session, args.fqdn, args.resource, args.root_collection)
+            session, args.fqdn, args.resource, args.root_collection, False)
     elif args.vault:
         executor = check.VaultCheck(
-            session, args.fqdn, args.vault, args.root_collection)
+            session, args.fqdn, args.vault, args.root_collection, False)
+    elif args.all_local_resources:
+        executor = check.ResourceCheck(
+            session, args.fqdn, None, args.root_collection, True)
+    elif args.all_local_vaults:
+        executor = check.VaultCheck(
+            session, args.fqdn, None, args.root_collection, True)
     elif args.data_object_list_file:
         executor = check.ObjectListCheck(
             session, args.fqdn, args.data_object_list_file)

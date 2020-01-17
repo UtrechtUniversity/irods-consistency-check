@@ -25,6 +25,7 @@ class HumanFormatter(Formatter):
     options = ['truncate']
     template = """----
 Type: {obj_type}
+Resource: {resource}
 iRODS path: {obj_path}
 Physical path: {phy_path}
 Status: {status}"""
@@ -42,7 +43,15 @@ Status: {status}"""
 
     def __call__(self, result):
         obj_type = result.obj_type.name
+
+        if result.obj_type in (check.ObjectType.DATAOBJECT,
+                               check.ObjectType.FILE):
+            resource = result.resource
+        else:
+            resource = "N/A"
+
         status = result.status.name
+
         # python 2 format defaults to ASCII encoding, enforce UTF-8
         if self.PY2:
             obj_path = result.obj_path.encode('utf-8')
@@ -83,7 +92,7 @@ class CSVFormatter(Formatter):
     def head(self):
         self.writer.writerow(('Type', 'Status', 'iRODS Path', 'Physical Path',
                               'Observed checksum', 'Expected checksum',
-                              'Observed size', 'Expected size'))
+                              'Observed size', 'Expected size', 'Resource'))
 
     def __call__(self, result):
         if self.PY2:
@@ -94,6 +103,12 @@ class CSVFormatter(Formatter):
             obj_path = result.obj_path
             phy_path = result.phy_path
 
+        if result.obj_type in (check.ObjectType.DATAOBJECT,
+                               check.ObjectType.FILE):
+            resource = result.resource
+        else:
+            resource = ""
+
         self.writer.writerow(
             (result.obj_type.name,
              result.status.name,
@@ -102,4 +117,5 @@ class CSVFormatter(Formatter):
              result.observed_values.get('observed_checksum', ''),
              result.observed_values.get('expected_checksum', ''),
              str(result.observed_values.get('observed_filesize', '')),
-             str(result.observed_values.get('expected_filesize', ''))))
+             str(result.observed_values.get('expected_filesize', '')),
+             resource))

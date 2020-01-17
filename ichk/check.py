@@ -45,7 +45,7 @@ class ObjectType(Enum):
 
 Result = namedtuple(
     'Result',
-    'obj_type obj_path phy_path status observed_values')
+    'obj_type obj_path phy_path status observed_values resource')
 
 
 def on_disk(path):
@@ -109,7 +109,7 @@ class ObjectChecker(object):
                     self.data_object[DataObject.replica_status], self.get_obj_name()))
 
         return Result(ObjectType.DATAOBJECT, self.get_obj_name(),
-                      self.phy_path, status, observed_values)
+                      self.phy_path, status, observed_values, self.data_object[Resource.name])
 
     @property
     def statinfo(self):
@@ -235,6 +235,13 @@ class Check(object):
             resource = None
         return resource
 
+    def get_local_ufs_resources(self, fqdn):
+        try:
+            return self.session.query(Resource).filter(Resource.location == fqdn).filter(
+                Resource.type == "unixfilesystem").get_results()
+        except iexc.NoResultFound:
+            return None
+
     def get_resource_from_phy_path(self, phy_path):
         try:
             resource = (self.session.query(Resource)
@@ -321,81 +328,110 @@ class Check(object):
 class ResourceCheck(Check):
     """Starting from a Resource path. Check consistency of database"""
 
-    def __init__(self, session, fqdn, resource_name, root_collection):
+    def __init__(self, session, fqdn, resource_name,
+                 root_collection, all_local_resources):
         super(ResourceCheck, self).__init__(session, fqdn, root_collection)
         self.resource_name = resource_name
+        self.all_local_resources = all_local_resources
 
     def run(self):
-        print("Checking resource {resource_name} for consistency"
-              .format(resource_name=self.resource_name), file=sys.stderr)
+        if self.all_local_resources:
 
-        self.formatter.head()
+            resource_data = self.get_local_ufs_resources(self.fqdn)
+            if resource_data is None:
+                print(
+                    "Error: no local unixfilesystem resources found.",
+                    file=sys.stderr)
+                sys.exit(1)
+            resources = list(resource_data)
+            resources.sort(key=lambda r: r[Resource.name])
 
-        resource = self.get_resource(self.resource_name)
+            resource_number = 0
+            for resource in resources:
+                self.process_resource(resource, resource_number == 0)
+                resource_number += 1
+        else:
+            resource = self.get_resource(self.resource_name)
+            self.process_resource(resource, True)
+
+    def process_resource(self, resource, print_header):
+        resource_name = resource[Resource.name]
+
+        print("Checking resource {} for consistency"
+              .format(resource_name), file=sys.stderr)
+
+        if print_header:
+            self.formatter.head()
+
         root, ancestors = self.find_root(resource)
-        self.root = resource
         for leaf, hiera in self.find_leaves(resource, ancestors):
-            self.vault = leaf[Resource.vault_path]
-            self.hiera = ";".join(hiera)
-            self.check_collections()
+            resource_hierarchy = ";".join(hiera)
+            self.check_collections(
+                leaf[Resource.name], resource_hierarchy, leaf[Resource.vault_path])
 
-    def collections_in_root(self):
+    def collections_in_root(self, resource_name):
         """Returns a generator for all the Collections in the root resource"""
         if self.root_collection is None:
             return (self.session.query(Collection.id, Collection.name)
-                    .filter(Resource.id == self.root[Resource.id])
+                    .filter(Resource.name == resource_name)
                     .get_results()
                     )
         else:
             generator_collection = (self.session.query(Collection.id, Collection.name)
-                                    .filter(Resource.id == self.root[Resource.id])
+                                    .filter(Resource.name == resource_name)
                                     .filter(Collection.name == self.root_collection)
                                     .get_results()
                                     )
             generator_subcollections = (self.session.query(Collection.id, Collection.name)
-                                        .filter(Resource.id == self.root[Resource.id])
+                                        .filter(Resource.name == resource_name)
                                         .filter(Like(Collection.name, self.root_collection + "/%%"))
                                         .get_results()
                                         )
             return chain(generator_collection, generator_subcollections)
 
-    def data_objects_in_collection(self, coll_id):
+    def data_objects_in_collection(self, coll_id, resource_hierarchy):
         """Returns a generator for all data objects in a collection"""
-        return (self.session.query(DataObject, Collection.name)
+        return (self.session.query(DataObject, Collection.name, Resource.name)
                 .filter(Collection.id == coll_id)
-                .filter(DataObject.resc_hier == self.hiera)
+                .filter(DataObject.resc_hier == resource_hierarchy)
                 .get_results()
                 )
 
-    def check_collections(self):
-        """Check every collection within the target resource for consistency"""
-        zone_name = self.root[Resource.zone_name]
+    def convert_collection_name_to_path(
+            self, coll_name, vault_path, zone_name):
         prefix = "/" + zone_name
+        return coll_name.replace(prefix, vault_path, 1)
 
-        for coll in self.collections_in_root():
+    def check_collections(self, resource_name, resource_hierarchy, vault_path):
+        """Check every collection within the target resource for consistency"""
+
+        for coll in self.collections_in_root(resource_name):
             coll_id = coll[Collection.id]
             coll_name = coll[Collection.name]
-            coll_path = coll_name.replace(prefix, self.vault)
+            coll_path = self.convert_collection_name_to_path(
+                coll_name, vault_path, self.session.zone)
             status_on_disk = on_disk(coll_path)
             result = Result(obj_type=ObjectType.COLLECTION,
                             obj_path=coll_name,
                             phy_path=coll_path,
                             status=status_on_disk,
-                            observed_values={})
+                            observed_values={},
+                            resource=None)
             self.formatter(result)
             if status_on_disk != Status.OK:
                 continue
 
             if PY2:
                 print("Checking data objects of collection {} in hierarchy: {}"
-                      .format(coll_name.encode('utf-8'), self.hiera),
+                      .format(coll_name.encode('utf-8'), resource_hierarchy),
                       file=sys.stderr)
             else:
                 print("Checking data objects of collection {} in hierarchy: {}"
-                      .format(coll_name, self.hiera),
+                      .format(coll_name, resource_hierarchy),
                       file=sys.stderr)
 
-            for data_object in self.data_objects_in_collection(coll_id):
+            for data_object in self.data_objects_in_collection(
+                    coll_id, resource_hierarchy):
                 phy_path = data_object[DataObject.path]
                 object_checker = ObjectChecker(data_object, phy_path)
                 result = object_checker.get_result()
@@ -405,56 +441,76 @@ class ResourceCheck(Check):
 class VaultCheck(Check):
     """Starting from a physical vault path check for consistency"""
 
-    def __init__(self, session, fqdn, vault_path, root_collection):
+    def __init__(self, session, fqdn, vault_path,
+                 root_collection, all_local_resources):
         super(VaultCheck, self).__init__(session, fqdn, root_collection)
+        self.all_local_resources = all_local_resources
         self.vault_path = vault_path
 
     def run(self):
-        print("Checking vault at {path} for consistency"
-              .format(path=self.vault_path),
+        if self.all_local_resources:
+
+            resource_data = self.get_local_ufs_resources(self.fqdn)
+            if resource_data is None:
+                print(
+                    "Error: no local unixfilesystem resources found.",
+                    file=sys.stderr)
+                sys.exit(1)
+            resources = list(resource_data)
+            resources.sort(key=lambda r: r[Resource.name])
+
+            vault_number = 0
+            for resource in resources:
+                self.process_vault(resource, vault_number == 0)
+                vault_number += 1
+        else:
+            resource = self.get_resource_from_phy_path(self.vault_path)
+            self.process_vault(resource, True)
+
+    def process_vault(self, resource, print_header):
+        vault_path = resource[Resource.vault_path]
+
+        print("Checking vault at {} for consistency"
+              .format(vault_path),
               file=sys.stderr)
 
-        self.formatter.head()
+        if print_header:
+            self.formatter.head()
 
-        path = self.vault_path
-        storage_resource = self.get_resource_from_phy_path(path)
-        while storage_resource is None:
-            path = os.path.dirname(path)
-            if path == '/':
-                sys.exit("Could not find iRODS resource containing {}"
-                         .format(self.vault_path))
-            storage_resource = self.get_resource_from_phy_path(path)
+        if resource is None:
+            sys.exit("Error: could not find iRODS resource with vault path {}"
+                     .format(vault_path))
 
-        self.storage_resource = storage_resource
-        self.vault = storage_resource[Resource.vault_path]
-
-        self.root, ancestors = self.find_root(storage_resource)
-        hiera = ancestors + [storage_resource[Resource.name]]
-        self.hiera = ";".join(hiera)
+        root, ancestors = self.find_root(resource)
+        hiera = ancestors + [resource[Resource.name]]
+        resource_hierarchy = ";".join(hiera)
 
         if self.root_collection is None:
-            path_to_walk = self.vault_path
+            path_to_walk = vault_path
         else:
             path_to_walk = self.root_collection.replace(
-                "/" + self.root[Resource.zone_name], self.vault_path, 1)
+                "/" + root[Resource.zone_name], vault_path, 1)
 
         for dirname, subdirs, filenames in os.walk(path_to_walk):
 
             for subdir in subdirs:
                 phy_path = os.path.join(dirname, subdir)
-                collection, status = self.get_collection(phy_path)
+                coll_name = self.convert_collection_path_to_name(
+                    phy_path, vault_path, self.session.zone)
+                collection, status = self.get_collection(coll_name, resource[Resource.name])
                 if collection:
                     obj_path = collection[Collection.name]
                 else:
                     obj_path = "UNKNOWN"
                 result = Result(
-                    ObjectType.DIRECTORY, obj_path, phy_path, status, {})
+                    ObjectType.DIRECTORY, obj_path, phy_path, status, {}, None)
 
                 self.formatter(result)
 
             for filename in filenames:
                 phy_path = os.path.join(dirname, filename)
-                data_object, status = self.get_data_object(phy_path)
+                data_object, status = self.get_data_object(
+                    phy_path, resource_hierarchy)
                 observed_values = {}
 
                 if data_object is None:
@@ -464,7 +520,8 @@ class VaultCheck(Check):
                         obj_path,
                         phy_path,
                         status,
-                        observed_values)
+                        observed_values,
+                        None)
                 else:
                     object_checker = ObjectChecker(data_object, phy_path)
                     result = object_checker.get_result()
@@ -474,20 +531,20 @@ class VaultCheck(Check):
                         result.obj_path,
                         result.phy_path,
                         result.status,
-                        result.observed_values)
+                        result.observed_values,
+                        result.resource)
                 self.formatter(result)
 
-    def get_collection(self, phy_path):
-        resource_id = self.storage_resource[Resource.id]
-        vault_path = self.storage_resource[Resource.vault_path]
-        zone = self.root[Resource.zone_name]
-        prefix = '/' + zone
-        coll_name = phy_path.replace(vault_path, prefix)
+    def convert_collection_path_to_name(self, phy_path, vault_path, zone_name):
+        prefix = '/' + zone_name
+        return phy_path.replace(vault_path, prefix, 1)
+
+    def get_collection(self, coll_name, resource_name):
         try:
             collection = (
                 self.session.query(Collection, Resource.id)
                 .filter(Collection.name == coll_name)
-                .filter(Resource.id == resource_id)
+                .filter(Resource.name == resource_name)
                 .one()
             )
         except iexc.NoResultFound:
@@ -498,12 +555,12 @@ class VaultCheck(Check):
 
         return collection, status
 
-    def get_data_object(self, phy_path):
+    def get_data_object(self, phy_path, resource_hierarchy):
         try:
             result = (
-                self.session.query(DataObject, Collection.name)
+                self.session.query(DataObject, Collection.name, Resource.name)
                 .filter(DataObject.path == phy_path)
-                .filter(DataObject.resc_hier == self.hiera)
+                .filter(DataObject.resc_hier == resource_hierarchy)
                 .first()
             )
         except iexc.NoResultFound:
@@ -542,14 +599,14 @@ class ObjectListCheck(Check):
 
         def _not_found():
             result = Result(ObjectType.DATAOBJECT, object_name,
-                            "", Status.NOT_FOUND, {})
+                            "", Status.NOT_FOUND, {}, None)
             self.formatter(result)
             return
 
         try:
             collection = self.session.collections.get(
                 irods_dirname(object_name))
-            objects = self.session.query(DataObject, Collection.name).filter(
+            objects = self.session.query(DataObject, Collection.name, Resource.name).filter(
                 DataObject.name == irods_basename(object_name)).filter(
                 DataObject.collection_id == collection.id).all()
         except (iexc.NoResultFound, iexc.CollectionDoesNotExist):
@@ -570,7 +627,7 @@ class ObjectListCheck(Check):
 
         if not results_found:
             result = Result(ObjectType.DATAOBJECT, object_name,
-                            "", Status.NO_LOCAL_REPLICA, {})
+                            "", Status.NO_LOCAL_REPLICA, {}, None)
 
         self.formatter(result)
 
