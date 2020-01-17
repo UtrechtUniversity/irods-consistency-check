@@ -16,16 +16,16 @@ Ichk can use either a human-readable output format, or comma-separated values (C
 
 ## Requirements
 - iRODS >= v4.2.x
-- Python 3.5+
+- Python 3.6+
 
 ## Installation
-This project contains a setup.py file which supports Python 3.5+ environments.
+This project contains a setup.py file which supports Python 3.6+ environments.
 Installation is easiest with pip. Just run the following commands:
 
 ```bash
 virtualenv --no-site-packages default
 . default/bin/activate
-pip3 install git+https://github.com/UtrechtUniversity/irods-consistency-check.git@v1.0.0
+pip3 install git+https://github.com/UtrechtUniversity/irods-consistency-check.git@v2.0.0
 ```
 
 When using a virtual environment, make sure that the iRODS system user has access to this environment.
