@@ -38,7 +38,8 @@ This user should also have access to the files in the vault path directly.
 
 The command line switches are displayed below:
 ```
-usage: ichk [-h] [-f FQDN] (-r RESOURCE | -v VAULT | -l DATA_OBJECT_LIST_FILE)
+usage: ichk [-h] [-f FQDN]
+            (-r RESOURCE | -v VAULT | -l DATA_OBJECT_LIST_FILE | --all-local-resources | --all-local-vaults)
             [-o OUTPUT] [-m {human,csv}] [-t TRUNCATE] [-T TIMEOUT]
             [-s ROOT_COLLECTION]
 
@@ -54,6 +55,10 @@ optional arguments:
   -l DATA_OBJECT_LIST_FILE, --data-object-list DATA_OBJECT_LIST_FILE
                         Check replicas of a list of data objects on this
                         server.
+  --all-local-resources
+                        Scan all unixfilesystem resources on this server
+  --all-local-vaults    Scan all vaults of unixfilesystem resources on this
+                        server
   -o OUTPUT, --output OUTPUT
                         Write output to file
   -m {human,csv}, --format {human,csv}
@@ -70,8 +75,11 @@ optional arguments:
 
 ```
 
-You need to supply either a resource, a vault path or a data object list.
+You need to supply either a resource, a vault path, a data object list, the --all-local-resources option
+or the --all-local-vaults option.
+
 The FQDN (fully qualified domain name) defaults to the FQDN of the current machine.
+
 When composable resources are used, the ichk command will scan for leaf resources starting from the given resource.
 
 ## Output
