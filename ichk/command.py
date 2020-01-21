@@ -60,12 +60,8 @@ def entry():
 
     session.connection_timeout = args.timeout
 
-    try:
+    with session:
         run(session, args)
-    except:
-        raise
-    finally:
-        session.cleanup()
 
 
 def setup_session():
