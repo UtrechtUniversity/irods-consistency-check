@@ -205,8 +205,9 @@ class Check(object):
                                 .filter(Collection.name == root_collection)
                                 .get_results())
             if len(list(found_collection)) != 1:
-                raise ValueError(
-                    "Root collection {} not found.".format(root_collection))
+                print("Error: root collection {} not found.".format(root_collection),
+                        file=sys.stderr)
+                sys.exit(1)
 
         self.root_collection = root_collection
 
