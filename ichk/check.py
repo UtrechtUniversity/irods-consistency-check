@@ -633,7 +633,7 @@ class ObjectListCheck(Check):
 
     def run(self):
         print("Checking object list {} for consistency of local replicas"
-              .format(self.object_list_file),
+              .format(self.object_list_file.name),
               file=sys.stderr)
 
         self.formatter.head()
