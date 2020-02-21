@@ -1,9 +1,12 @@
 """Check consistency between iRODS data objects and files in vaults."""
+
 from __future__ import print_function
 import sys
 import os
 import argparse
 import json
+import socket
+
 from getpass import getpass
 from ichk import check
 from irods.session import iRODSSession
@@ -11,12 +14,18 @@ from irodsutils import password_obfuscation
 
 
 def entry():
-    """Use as entry_point in setup.py"""
+    """Used as entry_point in setup.py"""
+    try:
+        main(get_args())
+    except KeyboardInterrupt:
+        print("Script interrupted by user.", file=sys.stderr)
 
+def get_args():
+    '''Returns command line arguments of the script.'''
     parser = argparse.ArgumentParser(description=__doc__)
 
     parser.add_argument("-f", "--fqdn",
-                        help="FQDN of resource")
+                        help="FQDN of resource", default=socket.getfqdn())
     scan_type = parser.add_mutually_exclusive_group(required=True)
     scan_type.add_argument("-r", "--resource",
                            help="iRODS path of resource")
@@ -47,17 +56,13 @@ def entry():
         print("Error: the --root-collection / -s and the --data-object-list / -l option can't be combined.")
         sys.exit(1)
 
-    if args.fqdn:
-        pass
-    else:
-        import socket
-        args.fqdn = socket.getfqdn()
-
     if args.root_collection is not None:
         args.root_collection = args.root_collection.rstrip("/")
 
-    session = setup_session()
+    return args
 
+def main(args):
+    session = setup_session()
     session.connection_timeout = args.timeout
 
     with session:
@@ -100,6 +105,7 @@ def setup_session():
 
 
 def run(session, args):
+    '''Actually runs the check'''
     if args.resource:
         executor = check.ResourceCheck(
             session, args.fqdn, args.resource, args.root_collection, False)
