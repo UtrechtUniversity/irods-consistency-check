@@ -229,9 +229,6 @@ class Check(object):
             resource = self.session.query(Resource).filter(
                 Resource.name == resource_name).one()
         except iexc.NoResultFound:
-            print("No result found for a resource named: {resource_name}"
-                  .format(**locals()),
-                  file=sys.stderr)
             resource = None
         return resource
 
@@ -352,6 +349,10 @@ class ResourceCheck(Check):
                 resource_number += 1
         else:
             resource = self.get_resource(self.resource_name)
+            if resource is None:
+                print("Error: resource {} not found".format(self.resource_name),
+                        file=sys.stderr)
+                sys.exit(1)
             self.process_resource(resource, True)
 
     def process_resource(self, resource, print_header):
@@ -465,6 +466,10 @@ class VaultCheck(Check):
                 vault_number += 1
         else:
             resource = self.get_resource_from_phy_path(self.vault_path)
+            if resource is None:
+                print("Error: unable to find resource with vault path {}.".format(self.vault_path),
+                        file=sys.stderr)
+                sys.exit(1)
             self.process_vault(resource, True)
 
     def process_vault(self, resource, print_header):
