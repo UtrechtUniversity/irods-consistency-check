@@ -91,16 +91,16 @@ The objects that are checked are categorized as follows:
 * FILE
 
 These status codes can be used to represent the result of the check:
-* OK
-* NOT EXISTING:  This object is found in the iRODS catalog, but is missing in the vault path.
-* NOT REGISTERED:  This object is found on the disk, but is missing from the iRODS catalog.
-* FILE SIZE MISMATCH:  The object has another file size than registered in the iRODS catalog.
-* CHECKSUM MISMATCH:  This object does not have the same checksum as registered in the iRODS catalog.
-* ACCESS DENIED:  The current user has no access to this object in the vault path.
-* NO CHECKSUM:  There is no checksum registered in the iRODS catalog. This implies that file sizes do match.
-* NO_LOCAL_REPLICA: No replica of data object present on server (only used for object list check)
-* NOT_FOUND: Object name not found in iRODS (only used for object list check)
-* REPLICA_IS_STALE : Replica is stale (i.e. out of date)
+* `OK`
+* `NOT_EXISTING`:  This object is found in the iRODS catalog, but is missing in the vault path.
+* `NOT_REGISTERED`:  This object is found on the disk, but is missing from the iRODS catalog.
+* `FILE_SIZE_MISMATCH`:  The object has another file size than registered in the iRODS catalog.
+* `CHECKSUM_MISMATCH`:  This object does not have the same checksum as registered in the iRODS catalog.
+* `ACCESS_DENIED`:  The current user has no access to this object in the vault path.
+* `NO_CHECKSUM`:  There is no checksum registered in the iRODS catalog. This implies that file sizes do match.
+* `NO_LOCAL_REPLICA`: No replica of data object present on server (only used for object list check)
+* `NOT_FOUND`: Object name not found in iRODS (only used for object list check)
+* `REPLICA_IS_STALE` : Replica is stale (i.e. out of date)
 
 
 The meaning of the fields in CSV output is:
