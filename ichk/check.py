@@ -30,7 +30,18 @@ class Status(Enum):
     NO_LOCAL_REPLICA = 7    # No replica of data object present on server
                             # (object list check)
     NOT_FOUND = 8           # Object not found in iRODS (object list check)
-    REPLICA_IS_STALE = 9    # Replica is stale
+    REPLICA_NOT_GOOD = 9    # Replica has a state other than GOOD_REPLICA
+
+    def __repr__(self):
+        return self.name
+
+
+class ReplicaStatus(Enum):
+    STALE_REPLICA = 0
+    GOOD_REPLICA = 1
+    INTERMEDIATE_REPLICA = 2
+    READ_LOCKED = 3
+    WRITE_LOCKED = 4
 
     def __repr__(self):
         return self.name
@@ -45,7 +56,7 @@ class ObjectType(Enum):
 
 Result = namedtuple(
     'Result',
-    'obj_type obj_path phy_path status observed_values resource')
+    'obj_type obj_path phy_path status replica_status observed_values resource')
 
 
 def on_disk(path):
@@ -84,6 +95,7 @@ class ObjectChecker(object):
 
     def get_result(self):
         status = self.exists_on_disk()
+        replica_status = ReplicaStatus(int(self.data_object[DataObject.replica_status]))
         observed_values = {}
 
         if status == Status.OK:
@@ -94,22 +106,13 @@ class ObjectChecker(object):
                 status, observed_checksums = self.compare_checksums()
                 observed_values.update(observed_checksums)
 
-            if self.data_object[DataObject.replica_status] == "1":
-                # Replica in a good state (i.e. not stale)
-                pass
-            elif self.data_object[DataObject.replica_status] == "0":
-                # Replica is stale. Override status message, but keep
-                # observed size / checksum values intact, since they could
-                # still be useful.
-                status = Status.REPLICA_IS_STALE
-            else:
-                # Note: once https://github.com/irods/irods/issues/4343 has been implemented, we'll
-                # need to add a state for dirty data objects.
-                raise ValueError("Unknown replica state {} for data object {}".format(
-                    self.data_object[DataObject.replica_status], self.get_obj_name()))
+            if replica_status != ReplicaStatus.GOOD_REPLICA:
+                # Replica is in a bad state (i.e. stale, intermediate or locked)
+                status = Status.REPLICA_NOT_GOOD
 
         return Result(ObjectType.DATAOBJECT, self.get_obj_name(),
-                      self.phy_path, status, observed_values, self.data_object[Resource.name])
+                      self.phy_path, status, replica_status.name, observed_values,
+                      self.data_object[Resource.name])
 
     @property
     def statinfo(self):
@@ -416,6 +419,7 @@ class ResourceCheck(Check):
             result = Result(obj_type=ObjectType.COLLECTION,
                             obj_path=coll_name,
                             phy_path=coll_path,
+                            replica_status="N/A",
                             status=status_on_disk,
                             observed_values={},
                             resource=None)
@@ -509,7 +513,7 @@ class VaultCheck(Check):
                 else:
                     obj_path = "UNKNOWN"
                 result = Result(
-                    ObjectType.DIRECTORY, obj_path, phy_path, status, {}, None)
+                    ObjectType.DIRECTORY, obj_path, phy_path, status, "N/A", {}, None)
 
                 self.formatter(result)
 
@@ -526,6 +530,7 @@ class VaultCheck(Check):
                         obj_path,
                         phy_path,
                         status,
+                        "N/A",
                         observed_values,
                         None)
                 else:
@@ -537,6 +542,7 @@ class VaultCheck(Check):
                         result.obj_path,
                         result.phy_path,
                         result.status,
+                        result.replica_status,
                         result.observed_values,
                         result.resource)
                 self.formatter(result)
@@ -605,7 +611,7 @@ class ObjectListCheck(Check):
 
         def _not_found():
             result = Result(ObjectType.DATAOBJECT, object_name,
-                            "", Status.NOT_FOUND, {}, None)
+                            "", Status.NOT_FOUND, "N/A", {}, None)
             self.formatter(result)
             return
 
@@ -633,7 +639,7 @@ class ObjectListCheck(Check):
 
         if not results_found:
             result = Result(ObjectType.DATAOBJECT, object_name,
-                            "", Status.NO_LOCAL_REPLICA, {}, None)
+                            "", Status.NO_LOCAL_REPLICA, "N/A", {}, None)
 
         self.formatter(result)
 

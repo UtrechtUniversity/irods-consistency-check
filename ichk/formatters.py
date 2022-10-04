@@ -28,7 +28,9 @@ Type: {obj_type}
 Resource: {resource}
 iRODS path: {obj_path}
 Physical path: {phy_path}
-Status: {status}"""
+Status: {status}
+Replica status: {replica_status}
+"""
 
     def __init__(self, output=None, truncate=None):
         if truncate:
@@ -51,6 +53,7 @@ Status: {status}"""
             resource = "N/A"
 
         status = result.status.name
+        replica_status = result.replica_status
 
         # python 2 format defaults to ASCII encoding, enforce UTF-8
         if self.PY2:
@@ -90,7 +93,7 @@ class CSVFormatter(Formatter):
             self.output, dialect=csv.excel)
 
     def head(self):
-        self.writer.writerow(('Type', 'Status', 'iRODS Path', 'Physical Path',
+        self.writer.writerow(('Type', 'Status', 'Replica status', 'iRODS Path', 'Physical Path',
                               'Observed checksum', 'Expected checksum',
                               'Observed size', 'Expected size', 'Resource'))
 
@@ -112,6 +115,7 @@ class CSVFormatter(Formatter):
         self.writer.writerow(
             (result.obj_type.name,
              result.status.name,
+             result.replica_status,
              obj_path,
              phy_path,
              result.observed_values.get('observed_checksum', ''),

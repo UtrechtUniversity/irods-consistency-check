@@ -100,12 +100,13 @@ These status codes can be used to represent the result of the check:
 * `NO_CHECKSUM`:  There is no checksum registered in the iRODS catalog. This implies that file sizes do match.
 * `NO_LOCAL_REPLICA`: No replica of data object present on server (only used for object list check)
 * `NOT_FOUND`: Object name not found in iRODS (only used for object list check)
-* `REPLICA_IS_STALE` : Replica is stale (i.e. out of date)
+* `REPLICA_NOT_GOOD` : Replica has a state other than good in the iCAT database (e.g. stale)
 
 
 The meaning of the fields in CSV output is:
 1. Object type
 2. Status code
+3. Replica status (as per the iCAT database)
 3. Logical path
 4. Vault path
 5. Observed checksum value (field is empty for collections / directories, as well as for files / data objects with a size mismatch)
