@@ -9,6 +9,7 @@ import socket
 
 from getpass import getpass
 from ichk import check
+from irods.message import (XML_Parser_Type, ET)
 from irods.session import iRODSSession
 from irodsutils import password_obfuscation
 
@@ -49,7 +50,8 @@ def get_args():
                         + ", default 600. Increase this to account for longer-running queries.")
     parser.add_argument("-s", "--root-collection", dest='root_collection', default=None,
                         help="Only check a particular collection and its subcollections.")
-
+    parser.add_argument("-q", "--quasi-xml", action="store_true", default=False,
+                        help="Enable the Quasi-XML parser, which supports unusual characters (0x01-0x31, backticks)")
     args = parser.parse_args()
 
     if args.root_collection is not None and args.data_object_list_file is not None:
@@ -64,6 +66,9 @@ def get_args():
 def main(args):
     session = setup_session()
     session.connection_timeout = args.timeout
+
+    if args.quasi_xml:
+        ET(XML_Parser_Type.QUASI_XML, session.server_version)
 
     with session:
         run(session, args)

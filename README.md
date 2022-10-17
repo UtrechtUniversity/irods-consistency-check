@@ -37,11 +37,12 @@ This environment file can be (re-)created with the iinit command.
 This user should also have access to the files in the vault path directly.
 
 The command line switches are displayed below:
+
 ```
 usage: ichk [-h] [-f FQDN]
             (-r RESOURCE | -v VAULT | -l DATA_OBJECT_LIST_FILE | --all-local-resources | --all-local-vaults)
             [-o OUTPUT] [-m {human,csv}] [-t TRUNCATE] [-T TIMEOUT]
-            [-s ROOT_COLLECTION]
+            [-s ROOT_COLLECTION] [-q]
 
 Check consistency between iRODS data objects and files in vaults.
 
@@ -72,7 +73,8 @@ optional arguments:
   -s ROOT_COLLECTION, --root-collection ROOT_COLLECTION
                         Only check a particular collection and its
                         subcollections.
-
+  -q, --quasi-xml       Enable the Quasi-XML parser, which supports unusual
+                        characters (0x01-0x31, backticks)
 ```
 
 You need to supply either a resource, a vault path, a data object list, the --all-local-resources option
