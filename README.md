@@ -12,6 +12,9 @@ It can run in three modes:
   replicas of these data objects. This mode can be used to check whether an iRODS server has valid replicas
   of a particular set of data objects.
 
+Resource mode and object list mode support both unixfilesystem (UFS) and S3 resources. Vault mode currently only supports
+unixfilesystem resources.
+
 Ichk can use either a human-readable output format, or comma-separated values (CSV).
 
 ## Requirements
@@ -103,6 +106,7 @@ These status codes can be used to represent the result of the check:
 * `NO_LOCAL_REPLICA`: No replica of data object present on server (only used for object list check)
 * `NOT_FOUND`: Object name not found in iRODS (only used for object list check)
 * `REPLICA_NOT_GOOD` : Replica has a state other than good in the iCAT database (e.g. stale)
+* `UNKNOWN` : unable to verify (e.g. collections on a S3 resource)
 
 
 The meaning of the fields in CSV output is:

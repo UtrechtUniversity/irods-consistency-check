@@ -3,48 +3,20 @@
 from __future__ import print_function
 import sys
 import os
-import errno
 from enum import Enum
 from collections import namedtuple
 from itertools import chain
-import hashlib
-import base64
-from ichk.formatters import Formatter
+
 from irods.column import Like
 from irods.data_object import irods_dirname, irods_basename
 from irods.models import Resource, Collection, DataObject
 import irods.exception as iexc
 
-CHUNK_SIZE = 8192
+from ichk.formatters import Formatter
+from ichk.resource_interface_factory import ResourceInterfaceFactory
+from ichk.status_codes import Status, ReplicaStatus
+
 PY2 = (sys.version_info.major == 2)
-
-
-class Status(Enum):
-    OK = 0
-    NOT_EXISTING = 1        # File registered in iRODS but not found in vault
-    NOT_REGISTERED = 2      # File found in vault but is not registered in iRODS
-    FILE_SIZE_MISMATCH = 3  # File sizes do not match between database and vault
-    CHECKSUM_MISMATCH = 4   # Checksums do not match between database and vault
-    ACCESS_DENIED = 5       # This script was denied access to the file
-    NO_CHECKSUM = 6         # iRODS has no checksum registered
-    NO_LOCAL_REPLICA = 7    # No replica of data object present on server
-                            # (object list check)
-    NOT_FOUND = 8           # Object not found in iRODS (object list check)
-    REPLICA_NOT_GOOD = 9    # Replica has a state other than GOOD_REPLICA
-
-    def __repr__(self):
-        return self.name
-
-
-class ReplicaStatus(Enum):
-    STALE_REPLICA = 0
-    GOOD_REPLICA = 1
-    INTERMEDIATE_REPLICA = 2
-    READ_LOCKED = 3
-    WRITE_LOCKED = 4
-
-    def __repr__(self):
-        return self.name
 
 
 class ObjectType(Enum):
@@ -59,134 +31,75 @@ Result = namedtuple(
     'obj_type obj_path phy_path status replica_status observed_values resource')
 
 
-def on_disk(path):
-
-    try:
-        os.stat(path)
-    except OSError as e:
-        if e.errno == errno.ENOENT:
-            return Status.NOT_EXISTING
-        elif e.errno == errno.EACCES:
-            return Status.ACCESS_DENIED
-        else:
-            raise
-
-    return Status.OK
-
-
 class ObjectChecker(object):
+    def __init__(self, session):
+        self.interface_factory = ResourceInterfaceFactory(session)
 
-    def __init__(self, data_object, phy_path):
-        self.data_object = data_object
-        self.phy_path = phy_path
-        self._statinfo = None
-
-    def get_obj_name(self):
+    def get_obj_name(self, data_object):
         if PY2:
             return "{}/{}".format(
-                self.data_object[Collection.name].encode('utf-8'),
-                self.data_object[DataObject.name].encode('utf-8')
+                data_object[Collection.name].encode('utf-8'),
+                data_object[DataObject.name].encode('utf-8')
             )
         else:
             return "{}/{}".format(
-                self.data_object[Collection.name],
-                self.data_object[DataObject.name]
+                data_object[Collection.name],
+                data_object[DataObject.name]
             )
 
-    def get_result(self):
-        status = self.exists_on_disk()
-        replica_status = ReplicaStatus(int(self.data_object[DataObject.replica_status]))
+    def get_result(self, data_object, resource_name, phy_path):
+        interface = self.interface_factory.get_resource_interface(resource_name)
+        status = interface.check_object_exists(phy_path)
+        replica_status = ReplicaStatus(int(data_object[DataObject.replica_status]))
         observed_values = {}
+
+        if interface is None:
+            print(f"Error: unable to find resource {resource_name}.")
+            sys.exit(1)
 
         if status == Status.OK:
             # File exists on disk and is accessible
-            status, observed_filesizes = self.compare_filesize()
+            status, observed_filesizes = self.compare_filesize(data_object, interface, phy_path)
             observed_values.update(observed_filesizes)
             if status == Status.OK:
-                status, observed_checksums = self.compare_checksums()
+                status, observed_checksums = self.compare_checksums(data_object, interface, phy_path)
                 observed_values.update(observed_checksums)
 
             if replica_status != ReplicaStatus.GOOD_REPLICA:
                 # Replica is in a bad state (i.e. stale, intermediate or locked)
                 status = Status.REPLICA_NOT_GOOD
 
-        return Result(ObjectType.DATAOBJECT, self.get_obj_name(),
-                      self.phy_path, status, replica_status.name, observed_values,
-                      self.data_object[Resource.name])
+        return Result(ObjectType.DATAOBJECT, self.get_obj_name(data_object),
+                      phy_path, status, replica_status.name, observed_values,
+                      data_object[Resource.name])
 
-    @property
-    def statinfo(self):
-        if self._statinfo:
-            return self._statinfo
-        try:
-            statinfo = os.stat(self.phy_path)
-        except OSError as e:
-            if e.errno == errno.ENOENT:
-                statinfo = Status.NOT_EXISTING
-            elif e.errno == errno.EACCES:
-                statinfo = Status.ACCESS_DENIED
-            else:
-                raise
 
-        self._statinfo = statinfo
-        return statinfo
-
-    def exists_on_disk(self):
-        if isinstance(self.statinfo, Status):
-            return self.statinfo
-        return Status.OK
-
-    def compare_filesize(self):
-        # TODO: what about sparse files?
-        data_object_size = self.data_object[DataObject.size]
-        if isinstance(self.statinfo, Status):
-            return self.statinfo, {}
+    def compare_filesize(self, data_object, interface, phy_path):
+        data_object_size = data_object[DataObject.size]
+        observed_size = interface.get_size(phy_path)
 
         info = {
             'expected_filesize': data_object_size,
-            'observed_filesize': self.statinfo.st_size}
+            'observed_filesize': observed_size }
 
-        if data_object_size != self.statinfo.st_size:
+        if data_object_size != observed_size:
             return Status.FILE_SIZE_MISMATCH, info
 
         return Status.OK, info
 
-    def compare_checksums(self):
-        irods_checksum = self.data_object[DataObject.checksum]
+    def compare_checksums(self, data_object, interface, phy_path):
+        irods_checksum = data_object[DataObject.checksum]
         info = {}
+
         if not irods_checksum:
             return Status.NO_CHECKSUM, info
-
-        try:
-            f = open(self.phy_path, 'rb')
-        except OSError as e:
-            if e.errno == errno.EACCES:
-                return Status.ACCESS_DENIED, info
-            else:
-                raise
+        elif irods_checksum.startswith("sha2"):
+            checksum_type = "sha2"
+            irods_checksum = irods_checksum[5:]
         else:
-            # iRODS returns sha256 checksums as base64 encoded string of
-            # the hash prefixed with sha2 and seperated
-            # by a colon, ':'.
-            # md5 checksums are not prefixed and not base64 encoded.
-            if irods_checksum.startswith("sha2:"):
-                irods_checksum = irods_checksum[5:]
-                hsh = hashlib.sha256()
-            else:
-                hsh = hashlib.md5()
+            checksum_type = "md5"
 
-            while True:
-                chunk = f.read(CHUNK_SIZE)
-                if chunk:
-                    hsh.update(chunk)
-                else:
-                    break
-
-            if hsh.name == 'md5':
-                phy_checksum = hsh.hexdigest()
-            else:
-                phy_checksum = base64.b64encode(hsh.digest()).decode('ascii')
-            f.close()
+        phy_checksum = interface.get_checksum(phy_path, checksum_type)
 
         info = {
             'expected_checksum': irods_checksum,
@@ -203,6 +116,8 @@ class Check(object):
     def __init__(self, session, fqdn, root_collection):
         self.fqdn = fqdn
         self.session = session
+        self.object_checker = ObjectChecker(session)
+
         if root_collection is not None:
             found_collection = (self.session.query(Collection.id, Collection.name)
                                 .filter(Collection.name == root_collection)
@@ -240,6 +155,13 @@ class Check(object):
         try:
             return self.session.query(Resource).filter(Resource.location == fqdn).filter(
                 Resource.type == "unixfilesystem").get_results()
+        except iexc.NoResultFound:
+            return None
+
+    def get_local_supported_resources(self, fqdn):
+        try:
+            return self.session.query(Resource).filter(Resource.location == fqdn).filter(
+                Resource.type == "unixfilesystem" or Resource.type =="s3").get_results()
         except iexc.NoResultFound:
             return None
 
@@ -334,11 +256,12 @@ class ResourceCheck(Check):
         super(ResourceCheck, self).__init__(session, fqdn, root_collection)
         self.resource_name = resource_name
         self.all_local_resources = all_local_resources
+        self.interface_factory = ResourceInterfaceFactory(session)
 
     def run(self):
         if self.all_local_resources:
 
-            resource_data = self.get_local_ufs_resources(self.fqdn)
+            resource_data = self.get_local_supported_resources(self.fqdn)
             if resource_data is None:
                 print(
                     "Error: no local unixfilesystem resources found.",
@@ -410,12 +333,14 @@ class ResourceCheck(Check):
     def check_collections(self, resource_name, resource_hierarchy, vault_path):
         """Check every collection within the target resource for consistency"""
 
+        resource_interface = self.interface_factory.get_resource_interface(resource_name)
+
         for coll in self.collections_in_root(resource_name):
             coll_id = coll[Collection.id]
             coll_name = coll[Collection.name]
             coll_path = self.convert_collection_name_to_path(
                 coll_name, vault_path, self.session.zone)
-            status_on_disk = on_disk(coll_path)
+            status_on_disk = resource_interface.check_coll_exists(coll_path)
             result = Result(obj_type=ObjectType.COLLECTION,
                             obj_path=coll_name,
                             phy_path=coll_path,
@@ -424,7 +349,7 @@ class ResourceCheck(Check):
                             observed_values={},
                             resource=None)
             self.formatter(result)
-            if status_on_disk != Status.OK:
+            if status_on_disk not in [Status.OK, Status.UNKNOWN]:
                 continue
 
             if PY2:
@@ -439,8 +364,7 @@ class ResourceCheck(Check):
             for data_object in self.data_objects_in_collection(
                     coll_id, resource_hierarchy):
                 phy_path = data_object[DataObject.path]
-                object_checker = ObjectChecker(data_object, phy_path)
-                result = object_checker.get_result()
+                result = self.object_checker.get_result(data_object, resource_name, phy_path)
                 self.formatter(result)
 
 
@@ -452,6 +376,7 @@ class VaultCheck(Check):
         super(VaultCheck, self).__init__(session, fqdn, root_collection)
         self.all_local_resources = all_local_resources
         self.vault_path = vault_path
+        interface_factory = ResourceInterfaceFactory(session)
 
     def run(self):
         if self.all_local_resources:
@@ -490,6 +415,9 @@ class VaultCheck(Check):
         if resource is None:
             sys.exit("Error: could not find iRODS resource with vault path {}"
                      .format(vault_path))
+
+        if resource[Resource.type] != "unixfilesystem":
+            sys.exit(f"Error: resource {resource[Resource.name]} is not a UFS resource.")
 
         root, ancestors = self.find_root(resource)
         hiera = ancestors + [resource[Resource.name]]
@@ -534,8 +462,7 @@ class VaultCheck(Check):
                         observed_values,
                         None)
                 else:
-                    object_checker = ObjectChecker(data_object, phy_path)
-                    result = object_checker.get_result()
+                    result = self.object_checker.get_result(data_object, resource[Resource.name], phy_path)
                     # Override object type in Result - should be FILE
                     result = Result(
                         ObjectType.FILE,
@@ -633,8 +560,7 @@ class ObjectListCheck(Check):
 
         for object in objects:
             if self._is_local_resource(object[DataObject.resource_name]):
-                object_checker = ObjectChecker(object, object[DataObject.path])
-                result = object_checker.get_result()
+                result = self.object_checker.get_result(object, object[DataObject.resource_name], object[DataObject.path])
                 results_found = True
 
         if not results_found:
