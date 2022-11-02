@@ -1,2 +1,3 @@
 python_irodsclient >= 1.1.0, < 1.2.0
 six
+boto3 == 1.23.10  # Last version that supports Python 3.6
