@@ -6,7 +6,6 @@ setup(
     description=('Check consistency of iRODS database and vault'),
     install_requires=[
         'python-irodsclient >= 1.1.0',
-        'enum34',
         'six'
     ],
     name='ichk',
