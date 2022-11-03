@@ -7,8 +7,6 @@ import sys
 
 class Formatter(object):
 
-    PY2 = (sys.version_info.major == 2)
-
     def __init__(self, output, **options):
         self.output = output
 
@@ -55,13 +53,8 @@ Replica status: {replica_status}
         status = result.status.name
         replica_status = result.replica_status
 
-        # python 2 format defaults to ASCII encoding, enforce UTF-8
-        if self.PY2:
-            obj_path = result.obj_path.encode('utf-8')
-            phy_path = result.phy_path.encode('utf-8')
-        else:
-            obj_path = result.obj_path
-            phy_path = result.phy_path
+        obj_path = result.obj_path
+        phy_path = result.phy_path
 
         def printl(message):
             print(message, file=self.output)
@@ -98,13 +91,8 @@ class CSVFormatter(Formatter):
                               'Observed size', 'Expected size', 'Resource'))
 
     def __call__(self, result):
-        if self.PY2:
-            # python 2 defaults to ASCII encoding, enforce UTF-8
-            obj_path = result.obj_path.encode('utf-8')
-            phy_path = result.phy_path.encode('utf-8')
-        else:
-            obj_path = result.obj_path
-            phy_path = result.phy_path
+        obj_path = result.obj_path
+        phy_path = result.phy_path
 
         if result.obj_type in (check.ObjectType.DATAOBJECT,
                                check.ObjectType.FILE):

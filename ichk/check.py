@@ -16,8 +16,6 @@ from ichk.formatters import Formatter
 from ichk.resource_interface_factory import ResourceInterfaceFactory
 from ichk.status_codes import Status, ReplicaStatus
 
-PY2 = (sys.version_info.major == 2)
-
 
 class ObjectType(Enum):
     COLLECTION = 0
@@ -36,16 +34,10 @@ class ObjectChecker(object):
         self.interface_factory = ResourceInterfaceFactory(session)
 
     def get_obj_name(self, data_object):
-        if PY2:
-            return "{}/{}".format(
-                data_object[Collection.name].encode('utf-8'),
-                data_object[DataObject.name].encode('utf-8')
-            )
-        else:
-            return "{}/{}".format(
+        return "{}/{}".format(
                 data_object[Collection.name],
                 data_object[DataObject.name]
-            )
+        )
 
     def get_result(self, data_object, resource_name, phy_path):
         interface = self.interface_factory.get_resource_interface(resource_name)
@@ -352,12 +344,7 @@ class ResourceCheck(Check):
             if status_on_disk not in [Status.OK, Status.UNKNOWN]:
                 continue
 
-            if PY2:
-                print("Checking data objects of collection {} in hierarchy: {}"
-                      .format(coll_name.encode('utf-8'), resource_hierarchy),
-                      file=sys.stderr)
-            else:
-                print("Checking data objects of collection {} in hierarchy: {}"
+            print("Checking data objects of collection {} in hierarchy: {}"
                       .format(coll_name, resource_hierarchy),
                       file=sys.stderr)
 
