@@ -28,7 +28,7 @@ Installation is easiest with pip. Just run the following commands:
 ```bash
 virtualenv --no-site-packages default
 . default/bin/activate
-pip3 install git+https://github.com/UtrechtUniversity/irods-consistency-check.git@v2.0.0
+pip3 install git+https://github.com/UtrechtUniversity/irods-consistency-check.git@v2.1.0
 ```
 
 When using a virtual environment, make sure that the iRODS system user has access to this environment.
