@@ -21,10 +21,12 @@ class S3ResourceInterface(ResourceInterface):
         self.s3_hostname = self._get_s3_hostname(resource_name)
         (self.s3_accesskey, self.s3_secretkey) = self._get_s3_credentials(resource_name)
         self.s3_region = self._get_resource_context_param(resource_name, "S3_REGIONNAME")
+        self.s3_protocol = self._get_s3_proto(resource_name)
         boto3_session = boto3.Session(aws_access_key_id = self.s3_accesskey.strip(),
                                    aws_secret_access_key = self.s3_secretkey.strip(),
                                    region_name = self.s3_region.strip())
-        self.boto3_client = boto3_session.client('s3', endpoint_url="https://" + self.s3_hostname)
+        self.endpoint_url = self.s3_protocol + "://" + self.s3_hostname
+        self.boto3_client = boto3_session.client('s3', endpoint_url = self.endpoint_url)
 
 
     def check_object_exists(self, path):
@@ -86,6 +88,11 @@ class S3ResourceInterface(ResourceInterface):
            return hsh.hexdigest()
         else:
            return base64.b64encode(hsh.digest()).decode('ascii')
+
+
+    def _get_s3_proto(self, resource_name):
+        value = self._get_resource_context_param(resource_name, "S3_PROTO")
+        return value.lower() if value is not None else "https"
 
 
     def _get_s3_hostname(self, resource_name):
