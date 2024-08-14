@@ -28,6 +28,7 @@ Installation is easiest with pip. Just run the following commands:
 ```bash
 python3 -m venv default
 . default/bin/activate
+pip3 install --upgrade pip
 pip3 install git+https://github.com/UtrechtUniversity/irods-consistency-check.git@v2.1.0
 ```
 
