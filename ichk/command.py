@@ -9,9 +9,9 @@ import socket
 
 from getpass import getpass
 from ichk import check
+from irods import password_obfuscation
 from irods.message import (XML_Parser_Type, ET)
 from irods.session import iRODSSession
-from irodsutils import password_obfuscation
 
 
 def entry():

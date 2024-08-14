@@ -6,11 +6,10 @@ setup(
     description=('Check consistency of iRODS database and vault'),
     install_requires=[
         'python-irodsclient >= 1.1.0, < 1.2.0',
-        'six',
         'boto3 == 1.23.10'
     ],
     name='ichk',
-    packages=['ichk', 'irodsutils'],
+    packages=['ichk'],
     entry_points={
         'console_scripts': [
             'ichk = ichk.command:entry'
