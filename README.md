@@ -26,7 +26,7 @@ This project contains a setup.py file which supports Python 3.6+ environments.
 Installation is easiest with pip. Just run the following commands:
 
 ```bash
-virtualenv --no-site-packages default
+python3 -m venv default
 . default/bin/activate
 pip3 install git+https://github.com/UtrechtUniversity/irods-consistency-check.git@v2.1.0
 ```
