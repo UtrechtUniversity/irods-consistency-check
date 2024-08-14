@@ -29,7 +29,7 @@ Installation is easiest with pip. Just run the following commands:
 python3 -m venv default
 . default/bin/activate
 pip3 install --upgrade pip
-pip3 install git+https://github.com/UtrechtUniversity/irods-consistency-check.git@v2.1.0
+pip3 install git+https://github.com/UtrechtUniversity/irods-consistency-check.git@v2.2.0
 ```
 
 When using a virtual environment, make sure that the iRODS system user has access to this environment.
