@@ -1,20 +1,19 @@
 """Scan and check resource or vault"""
 
-from __future__ import print_function
-import sys
 import os
-from enum import Enum
+import sys
 from collections import namedtuple
+from enum import Enum
 from itertools import chain
 
-from irods.column import Like
-from irods.data_object import irods_dirname, irods_basename
-from irods.models import Resource, Collection, DataObject
 import irods.exception as iexc
+from irods.column import Like
+from irods.data_object import irods_basename, irods_dirname
+from irods.models import Collection, DataObject, Resource
 
 from ichk.formatters import Formatter
 from ichk.resource_interface_factory import ResourceInterfaceFactory
-from ichk.status_codes import Status, ReplicaStatus
+from ichk.status_codes import ReplicaStatus, Status
 
 
 class ObjectType(Enum):
@@ -35,14 +34,17 @@ class ObjectChecker(object):
 
     def get_obj_name(self, data_object):
         return "{}/{}".format(
-                data_object[Collection.name],
-                data_object[DataObject.name]
+            data_object[Collection.name],
+            data_object[DataObject.name]
         )
 
-    def get_result(self, data_object, resource_name, phy_path, no_verify_checksum=False):
-        interface = self.interface_factory.get_resource_interface(resource_name)
+    def get_result(self, data_object, resource_name,
+                   phy_path, no_verify_checksum=False):
+        interface = self.interface_factory.get_resource_interface(
+            resource_name)
         status = interface.check_object_exists(phy_path)
-        replica_status = ReplicaStatus(int(data_object[DataObject.replica_status]))
+        replica_status = ReplicaStatus(
+            int(data_object[DataObject.replica_status]))
         observed_values = {}
 
         if interface is None:
@@ -51,23 +53,25 @@ class ObjectChecker(object):
 
         if status == Status.OK:
             # File exists on disk and is accessible
-            status, observed_filesizes = self.compare_filesize(data_object, interface, phy_path)
+            status, observed_filesizes = self.compare_filesize(
+                data_object, interface, phy_path)
             observed_values.update(observed_filesizes)
             if status == Status.OK and not no_verify_checksum:
-                status, observed_checksums = self.compare_checksums(data_object, interface, phy_path)
+                status, observed_checksums = self.compare_checksums(
+                    data_object, interface, phy_path)
                 observed_values.update(observed_checksums)
             elif no_verify_checksum:
                 observed_values.update({'expected_checksum': data_object[DataObject.checksum],
                                         'observed_checksum': "N/A (checksum verification disabled)"})
 
             if replica_status != ReplicaStatus.GOOD_REPLICA:
-                # Replica is in a bad state (i.e. stale, intermediate or locked)
+                # Replica is in a bad state (i.e. stale, intermediate or
+                # locked)
                 status = Status.REPLICA_NOT_GOOD
 
         return Result(ObjectType.DATAOBJECT, self.get_obj_name(data_object),
                       phy_path, status, replica_status.name, observed_values,
                       data_object[Resource.name])
-
 
     def compare_filesize(self, data_object, interface, phy_path):
         data_object_size = data_object[DataObject.size]
@@ -75,7 +79,7 @@ class ObjectChecker(object):
 
         info = {
             'expected_filesize': data_object_size,
-            'observed_filesize': observed_size }
+            'observed_filesize': observed_size}
 
         if data_object_size != observed_size:
             return Status.FILE_SIZE_MISMATCH, info
@@ -119,7 +123,7 @@ class Check(object):
                                 .get_results())
             if len(list(found_collection)) != 1:
                 print("Error: root collection {} not found.".format(root_collection),
-                        file=sys.stderr)
+                      file=sys.stderr)
                 sys.exit(1)
 
         self.root_collection = root_collection
@@ -156,7 +160,7 @@ class Check(object):
     def get_local_supported_resources(self, fqdn):
         try:
             return self.session.query(Resource).filter(Resource.location == fqdn).filter(
-                Resource.type == "unixfilesystem" or Resource.type =="s3").get_results()
+                Resource.type == "unixfilesystem" or Resource.type == "s3").get_results()
         except iexc.NoResultFound:
             return None
 
@@ -210,7 +214,14 @@ class Check(object):
 
     def find_leaves(self, resource, ancestors=None):
         """Find leaf nodes of the resource hierarchy. These are the storage
-        resources containing the actual data."""
+        resources containing the actual data.
+
+        :param resource: a resource to find leaves for, would typically be used
+                         with a coordinating resource if called non-recursively
+        :param ancestors: used internally to keep track of Ancestors, would typically
+                         be used with default value of None if called non-recursively.
+
+        :yields: leaf storage resources, along with its ancestors"""
 
         if ancestors is None:
             ancestors = []
@@ -275,7 +286,7 @@ class ResourceCheck(Check):
             resource = self.get_resource(self.resource_name)
             if resource is None:
                 print("Error: resource {} not found".format(self.resource_name),
-                        file=sys.stderr)
+                      file=sys.stderr)
                 sys.exit(1)
             self.process_resource(resource, True)
 
@@ -330,7 +341,8 @@ class ResourceCheck(Check):
     def check_collections(self, resource_name, resource_hierarchy, vault_path):
         """Check every collection within the target resource for consistency"""
 
-        resource_interface = self.interface_factory.get_resource_interface(resource_name)
+        resource_interface = self.interface_factory.get_resource_interface(
+            resource_name)
 
         for coll in self.collections_in_root(resource_name):
             coll_id = coll[Collection.id]
@@ -350,13 +362,14 @@ class ResourceCheck(Check):
                 continue
 
             print("Checking data objects of collection {} in hierarchy: {}"
-                      .format(coll_name, resource_hierarchy),
-                      file=sys.stderr)
+                  .format(coll_name, resource_hierarchy),
+                  file=sys.stderr)
 
             for data_object in self.data_objects_in_collection(
                     coll_id, resource_hierarchy):
                 phy_path = data_object[DataObject.path]
-                result = self.object_checker.get_result(data_object, resource_name, phy_path, self.no_verify_checksum)
+                result = self.object_checker.get_result(
+                    data_object, resource_name, phy_path, self.no_verify_checksum)
                 self.formatter(result)
 
 
@@ -369,7 +382,7 @@ class VaultCheck(Check):
         self.all_local_resources = all_local_resources
         self.no_verify_checksum = no_verify_checksum
         self.vault_path = vault_path
-        interface_factory = ResourceInterfaceFactory(session)
+        self.interface_factory = ResourceInterfaceFactory(session)
 
     def run(self):
         if self.all_local_resources:
@@ -391,7 +404,7 @@ class VaultCheck(Check):
             resource = self.get_resource_from_phy_path(self.vault_path)
             if resource is None:
                 print("Error: unable to find resource with vault path {}.".format(self.vault_path),
-                        file=sys.stderr)
+                      file=sys.stderr)
                 sys.exit(1)
             self.process_vault(resource, True)
 
@@ -410,7 +423,8 @@ class VaultCheck(Check):
                      .format(vault_path))
 
         if resource[Resource.type] != "unixfilesystem":
-            sys.exit(f"Error: resource {resource[Resource.name]} is not a UFS resource.")
+            sys.exit(
+                f"Error: resource {resource[Resource.name]} is not a UFS resource.")
 
         root, ancestors = self.find_root(resource)
         hiera = ancestors + [resource[Resource.name]]
@@ -428,7 +442,8 @@ class VaultCheck(Check):
                 phy_path = os.path.join(dirname, subdir)
                 coll_name = self.convert_collection_path_to_name(
                     phy_path, vault_path, self.session.zone)
-                collection, status = self.get_collection(coll_name, resource[Resource.name])
+                collection, status = self.get_collection(
+                    coll_name, resource[Resource.name])
                 if collection:
                     obj_path = collection[Collection.name]
                 else:
@@ -455,7 +470,8 @@ class VaultCheck(Check):
                         observed_values,
                         None)
                 else:
-                    result = self.object_checker.get_result(data_object, resource[Resource.name], phy_path, self.no_verify_checksum)
+                    result = self.object_checker.get_result(
+                        data_object, resource[Resource.name], phy_path, self.no_verify_checksum)
                     # Override object type in Result - should be FILE
                     result = Result(
                         ObjectType.FILE,
@@ -511,7 +527,8 @@ class VaultCheck(Check):
 class ObjectListCheck(Check):
     """Check all local replicas of a list of objects"""
 
-    def __init__(self, session, fqdn, object_list_file, no_verify_checksum=False):
+    def __init__(self, session, fqdn, object_list_file,
+                 no_verify_checksum=False):
         super(ObjectListCheck, self).__init__(session, fqdn, None)
         self.object_list_file = object_list_file
         self.no_verify_checksum = no_verify_checksum

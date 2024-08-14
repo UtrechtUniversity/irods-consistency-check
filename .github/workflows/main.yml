@@ -37,7 +37,4 @@ jobs:
     - name: Lint with flake8
       run: |
         pip install flake8
-        # This checks for syntax errors, undefined names, and a few other things.
-        # Please consult http://flake8.pycqa.org/en/3.7.8/user/error-codes.html for the
-        # exact meaning of the error codes.
-        flake8 ichk --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 ichk --count --show-source --statistics

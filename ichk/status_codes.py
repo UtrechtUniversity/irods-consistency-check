@@ -10,10 +10,11 @@ class Status(Enum):
     ACCESS_DENIED = 5       # This script was denied access to the file
     NO_CHECKSUM = 6         # iRODS has no checksum registered
     NO_LOCAL_REPLICA = 7    # No replica of data object present on server
-                            # (object list check)
+    # (object list check)
     NOT_FOUND = 8           # Object not found in iRODS (object list check)
     REPLICA_NOT_GOOD = 9    # Replica has a state other than GOOD_REPLICA
-    UNKNOWN = 10            # Unknown status (e.g. collection presence on S3 resource)
+    # Unknown status (e.g. collection presence on S3 resource)
+    UNKNOWN = 10
 
     def __repr__(self):
         return self.name

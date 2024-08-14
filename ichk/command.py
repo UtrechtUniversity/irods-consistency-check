@@ -1,17 +1,17 @@
 """Check consistency between iRODS data objects and files in vaults."""
 
-from __future__ import print_function
-import sys
-import os
 import argparse
 import json
+import os
 import socket
-
+import sys
 from getpass import getpass
-from ichk import check
+
 from irods import password_obfuscation
-from irods.message import (XML_Parser_Type, ET)
+from irods.message import (ET, XML_Parser_Type)
 from irods.session import iRODSSession
+
+from ichk import check
 
 
 def entry():
@@ -20,6 +20,7 @@ def entry():
         main(get_args())
     except KeyboardInterrupt:
         print("Script interrupted by user.", file=sys.stderr)
+
 
 def get_args():
     '''Returns command line arguments of the script.'''
@@ -64,6 +65,7 @@ def get_args():
         args.root_collection = args.root_collection.rstrip("/")
 
     return args
+
 
 def main(args):
     session = setup_session()

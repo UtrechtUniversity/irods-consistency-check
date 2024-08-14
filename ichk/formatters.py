@@ -1,8 +1,6 @@
 """Formatters for output of checks"""
 
-from __future__ import print_function
 from ichk import check
-import sys
 
 
 class Formatter(object):
