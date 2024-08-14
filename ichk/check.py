@@ -39,7 +39,7 @@ class ObjectChecker(object):
                 data_object[DataObject.name]
         )
 
-    def get_result(self, data_object, resource_name, phy_path):
+    def get_result(self, data_object, resource_name, phy_path, no_verify_checksum=False):
         interface = self.interface_factory.get_resource_interface(resource_name)
         status = interface.check_object_exists(phy_path)
         replica_status = ReplicaStatus(int(data_object[DataObject.replica_status]))
@@ -53,9 +53,12 @@ class ObjectChecker(object):
             # File exists on disk and is accessible
             status, observed_filesizes = self.compare_filesize(data_object, interface, phy_path)
             observed_values.update(observed_filesizes)
-            if status == Status.OK:
+            if status == Status.OK and not no_verify_checksum:
                 status, observed_checksums = self.compare_checksums(data_object, interface, phy_path)
                 observed_values.update(observed_checksums)
+            elif no_verify_checksum:
+                observed_values.update({'expected_checksum': data_object[DataObject.checksum],
+                                        'observed_checksum': "N/A (checksum verification disabled)"})
 
             if replica_status != ReplicaStatus.GOOD_REPLICA:
                 # Replica is in a bad state (i.e. stale, intermediate or locked)
@@ -244,11 +247,13 @@ class ResourceCheck(Check):
     """Starting from a Resource path. Check consistency of database"""
 
     def __init__(self, session, fqdn, resource_name,
-                 root_collection, all_local_resources):
+                 root_collection, all_local_resources=False,
+                 no_verify_checksum=False):
         super(ResourceCheck, self).__init__(session, fqdn, root_collection)
         self.resource_name = resource_name
         self.all_local_resources = all_local_resources
         self.interface_factory = ResourceInterfaceFactory(session)
+        self.no_verify_checksum = no_verify_checksum
 
     def run(self):
         if self.all_local_resources:
@@ -351,7 +356,7 @@ class ResourceCheck(Check):
             for data_object in self.data_objects_in_collection(
                     coll_id, resource_hierarchy):
                 phy_path = data_object[DataObject.path]
-                result = self.object_checker.get_result(data_object, resource_name, phy_path)
+                result = self.object_checker.get_result(data_object, resource_name, phy_path, self.no_verify_checksum)
                 self.formatter(result)
 
 
@@ -359,9 +364,10 @@ class VaultCheck(Check):
     """Starting from a physical vault path check for consistency"""
 
     def __init__(self, session, fqdn, vault_path,
-                 root_collection, all_local_resources):
+                 root_collection, all_local_resources=False, no_verify_checksum=False):
         super(VaultCheck, self).__init__(session, fqdn, root_collection)
         self.all_local_resources = all_local_resources
+        self.no_verify_checksum = no_verify_checksum
         self.vault_path = vault_path
         interface_factory = ResourceInterfaceFactory(session)
 
@@ -449,7 +455,7 @@ class VaultCheck(Check):
                         observed_values,
                         None)
                 else:
-                    result = self.object_checker.get_result(data_object, resource[Resource.name], phy_path)
+                    result = self.object_checker.get_result(data_object, resource[Resource.name], phy_path, self.no_verify_checksum)
                     # Override object type in Result - should be FILE
                     result = Result(
                         ObjectType.FILE,
@@ -505,9 +511,10 @@ class VaultCheck(Check):
 class ObjectListCheck(Check):
     """Check all local replicas of a list of objects"""
 
-    def __init__(self, session, fqdn, object_list_file):
+    def __init__(self, session, fqdn, object_list_file, no_verify_checksum=False):
         super(ObjectListCheck, self).__init__(session, fqdn, None)
         self.object_list_file = object_list_file
+        self.no_verify_checksum = no_verify_checksum
         self.resource_locality_lookup = self._gen_resource_locality_lookup()
 
     def _gen_resource_locality_lookup(self):
@@ -547,7 +554,10 @@ class ObjectListCheck(Check):
 
         for object in objects:
             if self._is_local_resource(object[DataObject.resource_name]):
-                result = self.object_checker.get_result(object, object[DataObject.resource_name], object[DataObject.path])
+                result = self.object_checker.get_result(object,
+                                                        object[DataObject.resource_name],
+                                                        object[DataObject.path],
+                                                        self.no_verify_checksum)
                 results_found = True
 
         if not results_found:

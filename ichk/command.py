@@ -50,6 +50,8 @@ def get_args():
                         + ", default 600. Increase this to account for longer-running queries.")
     parser.add_argument("-s", "--root-collection", dest='root_collection', default=None,
                         help="Only check a particular collection and its subcollections.")
+    parser.add_argument("--no-verify-checksum", action="store_true", default=False,
+                        help="Do not verify checksums of data objects. Just check presence and size of vault files.")
     parser.add_argument("-q", "--quasi-xml", action="store_true", default=False,
                         help="Enable the Quasi-XML parser, which supports unusual characters (0x01-0x31, backticks)")
     args = parser.parse_args()
@@ -113,19 +115,24 @@ def run(session, args):
     '''Actually runs the check'''
     if args.resource:
         executor = check.ResourceCheck(
-            session, args.fqdn, args.resource, args.root_collection, False)
+            session, args.fqdn, args.resource, args.root_collection,
+            all_local_resources=False, no_verify_checksum=args.no_verify_checksum)
     elif args.vault:
         executor = check.VaultCheck(
-            session, args.fqdn, args.vault, args.root_collection, False)
+            session, args.fqdn, args.vault, args.root_collection,
+            all_local_resources=False, no_verify_checksum=args.no_verify_checksum)
     elif args.all_local_resources:
         executor = check.ResourceCheck(
-            session, args.fqdn, None, args.root_collection, True)
+            session, args.fqdn, None, args.root_collection,
+            all_local_resources=True, no_verify_checksum=args.no_verify_checksum)
     elif args.all_local_vaults:
         executor = check.VaultCheck(
-            session, args.fqdn, None, args.root_collection, True)
+            session, args.fqdn, None, args.root_collection,
+            all_local_resources=True, no_verify_checksum=args.no_verify_checksum)
     elif args.data_object_list_file:
         executor = check.ObjectListCheck(
-            session, args.fqdn, args.data_object_list_file)
+            session, args.fqdn, args.data_object_list_file,
+            no_verify_checksum=args.no_verify_checksum)
     else:
         print("Error: unknown check type.", file=sys.stderr)
         sys.exit(1)

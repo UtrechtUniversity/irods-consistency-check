@@ -46,7 +46,7 @@ The command line switches are displayed below:
 usage: ichk [-h] [-f FQDN]
             (-r RESOURCE | -v VAULT | -l DATA_OBJECT_LIST_FILE | --all-local-resources | --all-local-vaults)
             [-o OUTPUT] [-m {human,csv}] [-t TRUNCATE] [-T TIMEOUT]
-            [-s ROOT_COLLECTION] [-q]
+            [-s ROOT_COLLECTION] [--no-verify-checksum] [-q]
 
 Check consistency between iRODS data objects and files in vaults.
 
@@ -77,6 +77,8 @@ optional arguments:
   -s ROOT_COLLECTION, --root-collection ROOT_COLLECTION
                         Only check a particular collection and its
                         subcollections.
+  --no-verify-checksum  Do not verify checksums of data objects. Just check
+                        presence and size of vault files.
   -q, --quasi-xml       Enable the Quasi-XML parser, which supports unusual
                         characters (0x01-0x31, backticks)
 ```
