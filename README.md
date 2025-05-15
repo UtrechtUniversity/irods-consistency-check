@@ -19,10 +19,10 @@ Ichk can use either a human-readable output format, or comma-separated values (C
 
 ## Requirements
 - iRODS >= v4.2.x
-- Python 3.6+
+- Python 3.8+
 
 ## Installation
-This project contains a setup.py file which supports Python 3.6+ environments.
+This project contains a setup.py file which supports Python 3.8+ environments.
 Installation is easiest with pip. Just run the following commands:
 
 ```bash
