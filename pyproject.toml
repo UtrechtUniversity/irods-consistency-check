@@ -1,0 +1,34 @@
+[project]
+authors = [
+    { name = "Sietse Snel", email = "s.t.snel@uu.nl" },
+    { name = "Paul Frederiks" },
+    { name = "Lazlo Westerhof", email = "l.r.westerhof@uu.nl" },
+    { name = "Chris Smeele" }
+]
+description = "Check consistency of iRODS database and vault"
+license = "MIT"
+dependencies = [
+    'python-irodsclient == 3.2.0',
+    'boto3 == 1.23.10'
+]
+name = "ichk"
+version = "3.0.0"
+
+[project.scripts]
+ichk = "ichk.command:entry"
+
+[build-system]
+requires = ["setuptools >= 82.0.1"]
+build-backend = "setuptools.build_meta"
+
+[tool.flake8]
+ignore = [
+     "E221",
+     "E402",
+     "W503"
+]
+import-order-style = "smarkets"
+strictness = "short"
+docstring_style = "sphinx"
+max-line-length = 127
+exclude = ["venv"]
