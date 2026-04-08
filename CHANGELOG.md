@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## UNRELEASED
 
 - Convert setup.{cfg,py} to pyproject.toml
+- Drop support for Python 3.8
 
 ## [3.0.0]
 
