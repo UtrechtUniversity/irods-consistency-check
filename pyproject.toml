@@ -12,7 +12,7 @@ dependencies = [
     'boto3 == 1.23.10'
 ]
 name = "ichk"
-version = "3.0.0"
+version = "3.1.0"
 
 [project.scripts]
 ichk = "ichk.command:entry"
