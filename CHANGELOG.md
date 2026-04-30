@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Convert setup.{cfg,py} to pyproject.toml
 - Drop support for Python 3.8
+- Use specific spOption client name for iRODS sessions
 
 ## [3.0.0]
 

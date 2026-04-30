@@ -107,6 +107,7 @@ def setup_session():
 
     session = iRODSSession(
         password=password,
+        application_name="ichk",
         **irods_env
     )
 
