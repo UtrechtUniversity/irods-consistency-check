@@ -61,7 +61,7 @@ class ObjectChecker(object):
                     data_object, interface, phy_path)
                 observed_values.update(observed_checksums)
             elif no_verify_checksum:
-                observed_values.update({'expected_checksum': data_object[DataObject.checksum],
+                observed_values.update({'expected_checksum': self.format_full_checksum(data_object[DataObject.checksum]),
                                         'observed_checksum': "N/A (checksum verification disabled)"})
 
             if replica_status != ReplicaStatus.GOOD_REPLICA:
@@ -86,6 +86,12 @@ class ObjectChecker(object):
 
         return Status.OK, info
 
+    def format_full_checksum(self, checksum):
+        if not checksum or checksum.startswith("sha2:")
+            return checksum
+        else:
+            return f"md5:{checksum}"
+
     def compare_checksums(self, data_object, interface, phy_path):
         irods_checksum = data_object[DataObject.checksum]
         info = {}
@@ -101,8 +107,9 @@ class ObjectChecker(object):
         phy_checksum = interface.get_checksum(phy_path, checksum_type)
 
         info = {
-            'expected_checksum': irods_checksum,
-            'observed_checksum': phy_checksum}
+            'expected_checksum': f"{checksum_type}:{irods_checksum}",
+            'observed_checksum': f"{checksum_type}:{phy_checksum}"
+        }
 
         if phy_checksum != irods_checksum:
             return Status.CHECKSUM_MISMATCH, info

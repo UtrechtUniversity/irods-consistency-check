@@ -44,6 +44,8 @@ def get_args():
                         help="Write output to file")
     parser.add_argument("-m", "--format", dest="fmt", default='human',
                         help="Output format", choices=['human', 'csv'])
+    parser.add_argument("-c", "--checksum-format", dest="checksum_format", default='irods',
+                        help="Checksum output format (default: irods)", choices=['irods', 'irods-short', 'hex', 'hex-short'])
     parser.add_argument("-t", "--truncate", default=False,
                         help="Truncate the output to the width of the console")
     parser.add_argument("-T", "--timeout", default=10 * 60, type=int,
@@ -140,7 +142,9 @@ def run(session, args):
         print("Error: unknown check type.", file=sys.stderr)
         sys.exit(1)
 
-    options = {'output': args.output or sys.stdout, 'fmt': args.fmt}
+    options = {'output': args.output or sys.stdout,
+               'fmt': args.fmt,
+               "checksum_format": args.checksum_format}
     if args.truncate:
         options['truncate'] = True
 
