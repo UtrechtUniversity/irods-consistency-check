@@ -1,5 +1,7 @@
 """Formatters for output of checks"""
 
+import base64
+
 from ichk import check
 
 
@@ -7,6 +9,43 @@ class Formatter(object):
 
     def __init__(self, output, **options):
         self.output = output
+        self.checksum_format = options.get("checksum_format", "irods")
+
+    def _format_checksum(self, checksum):
+        def get_checksum_value(c):
+            if checksum.startswith("md5:"):
+                return c[4:]
+            elif checksum.startswith("sha2:"):
+                return c[5:]
+            else:
+                return c
+
+        def get_checksum_type(c):
+            if c.startswith("md5:"):
+                return "md5"
+            elif c.startswith("sha2:"):
+                return "sha2"
+            else:
+                return "unknown"
+
+        if checksum in ["", "N/A (checksum verification disabled)"]:
+            return checksum
+
+        if self.checksum_format == "irods":
+            if checksum.startswith("md5:"):
+                return get_checksum_value(checksum)
+            else:
+                return checksum
+        elif self.checksum_format == "irods-short":
+            return get_checksum_value(checksum)
+        elif self.checksum_format == "hex":
+            checksum_type = get_checksum_type(checksum)
+            checksum_value = base64.b64decode(get_checksum_value(checksum)).hex()
+            return f"{checksum_type}:{checksum_value}"
+        elif self.checksum_format == "hex-short":
+            return base64.b64decode(get_checksum_value(checksum)).hex()
+        else:
+            raise NotImplementedError("Cannot format checksum for format " + self.checksum_format)
 
     def head(self):
         raise NotImplementedError
@@ -28,13 +67,13 @@ Status: {status}
 Replica status: {replica_status}
 """
 
-    def __init__(self, output=None, truncate=None):
+    def __init__(self, output=None, checksum_format="irods", truncate=None):
         if truncate:
             # TODO: write routine to check column width of active terminal
             self.truncate = 179
         else:
             self.truncate = None
-        super(HumanFormatter, self).__init__(output=output)
+        super(HumanFormatter, self).__init__(output=output, checksum_format=checksum_format)
 
     def head(self):
         print("Results of consistency check\n\n", file=self.output)
@@ -66,8 +105,8 @@ Replica status: {replica_status}
             printl("Observed size: " + str(values['observed_filesize']))
 
         if result.status is check.Status.CHECKSUM_MISMATCH:
-            printl("Expected checksum: " + values['expected_checksum'])
-            printl("Observed checksum: " + values['observed_checksum'])
+            printl("Expected checksum: " + self._format_checksum(values['expected_checksum']))
+            printl("Observed checksum: " + self._format_checksum(values['observed_checksum']))
 
         printl("")
 
@@ -76,8 +115,8 @@ class CSVFormatter(Formatter):
     name = 'csv'
     options = []
 
-    def __init__(self, output=None):
-        super(CSVFormatter, self).__init__(output=output)
+    def __init__(self, output=None, checksum_format="irods"):
+        super(CSVFormatter, self).__init__(output=output, checksum_format=checksum_format)
 
         import csv
         self.writer = csv.writer(
@@ -104,8 +143,8 @@ class CSVFormatter(Formatter):
              result.replica_status,
              obj_path,
              phy_path,
-             result.observed_values.get('observed_checksum', ''),
-             result.observed_values.get('expected_checksum', ''),
+             self._format_checksum(result.observed_values.get('observed_checksum', '')),
+             self._format_checksum(result.observed_values.get('expected_checksum', '')),
              str(result.observed_values.get('observed_filesize', '')),
              str(result.observed_values.get('expected_filesize', '')),
              resource))
