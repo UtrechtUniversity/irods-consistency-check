@@ -45,12 +45,13 @@ The command line switches are displayed below:
 ```
 usage: ichk [-h] [-f FQDN]
             (-r RESOURCE | -v VAULT | -l DATA_OBJECT_LIST_FILE | --all-local-resources | --all-local-vaults)
-            [-o OUTPUT] [-m {human,csv}] [-t TRUNCATE] [-T TIMEOUT]
-            [-s ROOT_COLLECTION] [--no-verify-checksum] [-q]
+            [-o OUTPUT] [-m {human,csv}]
+            [-c {irods,irods-short,hex,hex-short}] [-t TRUNCATE]
+            [-T TIMEOUT] [-s ROOT_COLLECTION] [--no-verify-checksum] [-q]
 
 Check consistency between iRODS data objects and files in vaults.
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
   -f FQDN, --fqdn FQDN  FQDN of resource
   -r RESOURCE, --resource RESOURCE
@@ -68,6 +69,8 @@ optional arguments:
                         Write output to file
   -m {human,csv}, --format {human,csv}
                         Output format
+  -c {irods,irods-short,hex,hex-short}, --checksum-format {irods,irods-short,hex,hex-short}
+                        Checksum output format (default: irods)
   -t TRUNCATE, --truncate TRUNCATE
                         Truncate the output to the width of the console
   -T TIMEOUT, --timeout TIMEOUT
